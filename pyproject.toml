@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "x4-md-transpiler"
+version = "0.1.0"
+description = "Generate X4 Mission Director XML from Python objects."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "Codex" }
+]
+
+[project.optional-dependencies]
+test = [
+  "coverage>=7.6",
+  "pytest>=8.3",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+x4md = ["py.typed"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+
+[tool.coverage.run]
+source = ["x4md"]
+branch = true
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true
+omit = [
+  "*/__pycache__/*",
+]
