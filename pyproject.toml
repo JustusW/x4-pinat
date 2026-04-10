@@ -3,13 +3,25 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "x4-md-transpiler"
-version = "0.1.0"
-description = "Generate X4 Mission Director XML from Python objects."
+name = "x4-pinat"
+version = "1.0.0"
+description = "X4-PINAT: Python Interface for Navigating Aggressive Transpilation - A comprehensive, type-safe library for generating X4: Foundations Mission Director and AI-script XML from Python code."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
   { name = "Codex" }
+]
+keywords = ["x4", "x4-foundations", "mission-director", "modding", "xml", "transpiler", "egosoft"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Topic :: Games/Entertainment",
+  "Topic :: Software Development :: Code Generators",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
 ]
 
 [project.optional-dependencies]

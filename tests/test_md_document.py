@@ -184,5 +184,41 @@ class ComplexWorkflowTests(unittest.TestCase):
         self.assertIn('<break/>', xml)
 
 
+class OnAbortTests(unittest.TestCase):
+    """Tests for OnAbort cue child node added in Phase 1."""
+
+    def test_on_abort_basic(self):
+        from x4md import OnAbort, DebugText
+        xml = OnAbort(DebugText("Cue aborted")).to_xml()
+        self.assertIn("<on_abort>", xml)
+        self.assertIn("<debug_text", xml)
+        self.assertIn("Cue aborted", xml)
+
+    def test_on_abort_with_multiple_actions(self):
+        from x4md import OnAbort, DebugText, SetValue
+        xml = OnAbort(
+            DebugText("Cleanup on abort"),
+            SetValue(name="$active", exact=False)
+        ).to_xml()
+        self.assertIn("<on_abort>", xml)
+        self.assertIn("<debug_text", xml)
+        self.assertIn("<set_value", xml)
+        self.assertIn('name="$active"', xml)
+
+    def test_cue_with_on_abort(self):
+        from x4md import Cue, Conditions, Actions, OnAbort, CheckValue, SetValue, DebugText
+        cue = Cue(
+            "TestCue",
+            Conditions(CheckValue("$ready")),
+            Actions(SetValue(name="$done", exact=True)),
+            OnAbort(DebugText("Aborted"))
+        )
+        xml = cue.to_xml()
+        self.assertIn('<cue name="TestCue">', xml)
+        self.assertIn("<conditions>", xml)
+        self.assertIn("<actions>", xml)
+        self.assertIn("<on_abort>", xml)
+
+
 if __name__ == "__main__":
     unittest.main()

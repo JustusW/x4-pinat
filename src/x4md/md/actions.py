@@ -610,18 +610,17 @@ class SortList(ActionNode):
     Maps to X4 MD <sort_list> element.
 
     Args:
-        list: List variable to sort
-        *children: Sort criteria nodes
+        name: List variable name to sort
+        sortkey: Optional sort key expression
 
     Example:
-        SortList(list="$stations")
+        SortList(name="$stations", sortkey="@$station.name")
     """
 
-    def __init__(self, *, list: str, *children: ActionNode) -> None:
+    def __init__(self, *, name: str, sortkey: ExprLike | None = None) -> None:
         super().__init__(
             tag="sort_list",
-            attrs=normalize_attrs({"list": list}),
-            children=list(children) if children else [],
+            attrs=normalize_attrs({"name": name, "sortkey": sortkey}),
         )
 
 
@@ -632,17 +631,30 @@ class EditOrderParam(ActionNode):
 
     Args:
         object: Object whose order to modify
+        orderid: ID of the order to modify (optional)
         param: Parameter name to edit
         value: New parameter value
 
     Example:
-        EditOrderParam(object="$ship", param="maxbuy", value=10)
+        EditOrderParam(object="$ship", orderid="TradeRoutine", param="maxbuy", value=10)
     """
 
-    def __init__(self, *, object: ExprLike, param: str, value: ExprLike) -> None:
+    def __init__(
+        self,
+        *,
+        object: ExprLike,
+        param: str,
+        value: ExprLike,
+        orderid: ExprLike | None = None,
+    ) -> None:
         super().__init__(
             tag="edit_order_param",
-            attrs=normalize_attrs({"object": object, "param": param, "value": value}),
+            attrs=normalize_attrs({
+                "object": object,
+                "orderid": orderid,
+                "param": param,
+                "value": value,
+            }),
         )
 
 
@@ -1058,4 +1070,154 @@ class SortTrades(ActionNode):
                     "result": result,
                 }
             ),
+        )
+
+
+class AppendListElements(ActionNode):
+    """Append all elements from one list to another.
+
+    Maps to X4 MD <append_list_elements> element.
+
+    Args:
+        name: Target list to append to
+        other: Source list to append from
+
+    Example:
+        AppendListElements(name="$allShips", other="$newShips")
+    """
+
+    def __init__(self, *, name: str, other: ExprLike) -> None:
+        super().__init__(
+            tag="append_list_elements",
+            attrs=normalize_attrs({"name": name, "other": other}),
+        )
+
+
+class CreatePosition(ActionNode):
+    """Create position object for navigation.
+
+    Maps to X4 AI <create_position> element.
+
+    Args:
+        name: Variable to store position
+        object: Object to create position from
+        space: Space context
+        x, y, z: Coordinates
+        min, max: Random offset range
+
+    Example:
+        CreatePosition(name="$pos", object="$station", min="1km", max="5km")
+    """
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        object: ExprLike | None = None,
+        space: ExprLike | None = None,
+        x: ExprLike | None = None,
+        y: ExprLike | None = None,
+        z: ExprLike | None = None,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="create_position",
+            attrs=normalize_attrs({
+                "name": name,
+                "object": object,
+                "space": space,
+                "x": x,
+                "y": y,
+                "z": z,
+                "min": min,
+                "max": max,
+            }),
+        )
+
+
+class GetJumpPath(ActionNode):
+    """Calculate jump path between sectors.
+
+    Maps to X4 AI <get_jump_path> element.
+
+    Args:
+        result: Variable to store path
+        start: Start sector/object
+        end: End sector/object
+
+    Example:
+        GetJumpPath(result="$path", start="this.sector", end="$targetSector")
+    """
+
+    def __init__(self, *, result: str, start: ExprLike, end: ExprLike) -> None:
+        super().__init__(
+            tag="get_jump_path",
+            attrs=normalize_attrs({"result": result, "start": start, "end": end}),
+        )
+
+
+class SetCommand(ActionNode):
+    """Set command interface for object.
+
+    Maps to X4 AI <set_command> element.
+
+    Args:
+        command: Command to set
+
+    Example:
+        SetCommand(command="'Attack'")
+    """
+
+    def __init__(self, *, command: ExprLike) -> None:
+        super().__init__(
+            tag="set_command",
+            attrs=normalize_attrs({"command": command}),
+        )
+
+
+class SetCommandAction(ActionNode):
+    """Set command action.
+
+    Maps to X4 AI <set_command_action> element.
+
+    Args:
+        commandaction: Action to set
+
+    Example:
+        SetCommandAction(commandaction="'attacking'")
+    """
+
+    def __init__(self, *, commandaction: ExprLike) -> None:
+        super().__init__(
+            tag="set_command_action",
+            attrs=normalize_attrs({"commandaction": commandaction}),
+        )
+
+
+class Delay(ActionNode):
+    """Add delay before cue activation.
+
+    Maps to X4 MD <delay> cue child element.
+
+    Args:
+        exact: Exact delay duration
+        min: Minimum delay
+        max: Maximum delay
+
+    Example:
+        Delay(exact="5s")
+        Delay(min="1s", max="10s")
+    """
+
+    def __init__(
+        self,
+        *,
+        exact: ExprLike | None = None,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="delay",
+            attrs=normalize_attrs({"exact": exact, "min": min, "max": max}),
         )

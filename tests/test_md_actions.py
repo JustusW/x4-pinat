@@ -10,6 +10,7 @@ from x4md import (
     CancelCue,
     CancelOrder,
     Continue,
+    CreateList,
     DebugText,
     DoAll,
     DoElse,
@@ -17,6 +18,16 @@ from x4md import (
     DoForEach,
     DoIf,
     DoWhile,
+    EditOrderParam,
+    FindBuyOffer,
+    FindDockingbay,
+    FindGate,
+    FindObject,
+    FindSector,
+    FindSellOffer,
+    FindShip,
+    FindStation,
+    GetWareReservation,
     MDCreateOrder,
     MoneyExpr,
     Param,
@@ -25,13 +36,19 @@ from x4md import (
     RemoveFromList,
     RemoveValue,
     Return,
+    RewardPlayer,
     RunActions,
     SetObjectName,
+    SetSkill,
     SetValue,
     ShowNotification,
+    ShuffleList,
     SignalCueAction,
     SignalCueInstantly,
     SignalObjects,
+    SortList,
+    SortTrades,
+    SubstituteText,
     TableEntry,
     TableExpr,
     TextExpr,
@@ -331,6 +348,146 @@ class MiscActionTests(unittest.TestCase):
         self.assertIn("param=\"'GT_Test'\"", xml)
         self.assertIn('param2="table[$Ship = $ship]"', xml)
         self.assertIn('delay="1ms"', xml)
+
+
+class UtilityActionTests(unittest.TestCase):
+    """Test utility actions added in Phase 1."""
+
+    def test_set_skill(self):
+        xml = SetSkill(object="$npc", skill="engineering", exact="3").to_xml()
+        self.assertIn("<set_skill", xml)
+        self.assertIn('object="$npc"', xml)
+        self.assertIn('skill="engineering"', xml)
+        self.assertIn('exact="3"', xml)
+
+    def test_set_skill_with_range(self):
+        xml = SetSkill(object="$npc", skill="piloting", min="1", max="5").to_xml()
+        self.assertIn('skill="piloting"', xml)
+        self.assertIn('min="1"', xml)
+        self.assertIn('max="5"', xml)
+
+    def test_create_list(self):
+        xml = CreateList(name="$myList").to_xml()
+        self.assertIn("<create_list", xml)
+        self.assertIn('name="$myList"', xml)
+
+    def test_shuffle_list(self):
+        xml = ShuffleList(list="$trades").to_xml()
+        self.assertIn("<shuffle_list", xml)
+        self.assertIn('list="$trades"', xml)
+
+    def test_sort_list(self):
+        xml = SortList(name="$ships", sortkey="@$ship.name").to_xml()
+        self.assertIn("<sort_list", xml)
+        self.assertIn('name="$ships"', xml)
+        self.assertIn('sortkey="@$ship.name"', xml)
+
+    def test_edit_order_param(self):
+        xml = EditOrderParam(object="$ship", orderid="TradeRoutine", param="range", value="3").to_xml()
+        self.assertIn("<edit_order_param", xml)
+        self.assertIn('object="$ship"', xml)
+        self.assertIn('orderid="TradeRoutine"', xml)
+        self.assertIn('param="range"', xml)
+        self.assertIn('value="3"', xml)
+
+    def test_substitute_text(self):
+        xml = SubstituteText(text="Hello {NAME}", source="{$player.name}", result="$greeting").to_xml()
+        self.assertIn("<substitute_text", xml)
+        self.assertIn('text="Hello {NAME}"', xml)
+        self.assertIn('source="{$player.name}"', xml)
+        self.assertIn('result="$greeting"', xml)
+
+    def test_reward_player(self):
+        xml = RewardPlayer(money="100000Cr").to_xml()
+        self.assertIn("<reward_player", xml)
+        self.assertIn('money="100000Cr"', xml)
+
+    def test_sort_trades(self):
+        xml = SortTrades(tradelist="$trades", sorter="@$trade.profit", result="$sorted").to_xml()
+        self.assertIn("<sort_trades", xml)
+        self.assertIn('tradelist="$trades"', xml)
+        self.assertIn('sorter="@$trade.profit"', xml)
+        self.assertIn('result="$sorted"', xml)
+
+
+class FindActionTests(unittest.TestCase):
+    """Test find/query actions added in Phase 1."""
+
+    def test_find_buy_offer_basic(self):
+        xml = FindBuyOffer(space="$sector", wares="[$energycells]", result="$offer").to_xml()
+        self.assertIn("<find_buy_offer", xml)
+        self.assertIn('space="$sector"', xml)
+        self.assertIn('wares="[$energycells]"', xml)
+        self.assertIn('result="$offer"', xml)
+
+    def test_find_buy_offer_with_children(self):
+        from x4md import MatchBuyer
+        xml = FindBuyOffer(
+            MatchBuyer(friend=True),
+            space="$sector",
+            wares="[$ore]",
+            result="$offers"
+        ).to_xml()
+        self.assertIn("<find_buy_offer", xml)
+        self.assertIn("<match_buyer", xml)
+        self.assertIn('friend="true"', xml)
+
+    def test_find_sell_offer(self):
+        xml = FindSellOffer(space="$zone", wares="[$food]", result="$offer", multiple=True).to_xml()
+        self.assertIn("<find_sell_offer", xml)
+        self.assertIn('space="$zone"', xml)
+        self.assertIn('wares="[$food]"', xml)
+        self.assertIn('multiple="true"', xml)
+
+    def test_find_station(self):
+        xml = FindStation(space="player.galaxy", name="$station").to_xml()
+        self.assertIn("<find_station", xml)
+        self.assertIn('space="player.galaxy"', xml)
+        self.assertIn('name="$station"', xml)
+
+    def test_find_sector(self):
+        xml = FindSector(space="player.galaxy", name="$sector").to_xml()
+        self.assertIn("<find_sector", xml)
+        self.assertIn('space="player.galaxy"', xml)
+        self.assertIn('name="$sector"', xml)
+
+    def test_find_gate(self):
+        xml = FindGate(space="$sector", name="$gate").to_xml()
+        self.assertIn("<find_gate", xml)
+        self.assertIn('space="$sector"', xml)
+        self.assertIn('name="$gate"', xml)
+
+    def test_find_dockingbay(self):
+        xml = FindDockingbay(object="$station", name="$bay").to_xml()
+        self.assertIn("<find_dockingbay", xml)
+        self.assertIn('object="$station"', xml)
+        self.assertIn('name="$bay"', xml)
+
+    def test_find_ship(self):
+        xml = FindShip(space="$sector", name="$ship").to_xml()
+        self.assertIn("<find_ship", xml)
+        self.assertIn('space="$sector"', xml)
+        self.assertIn('name="$ship"', xml)
+
+    def test_find_object(self):
+        xml = FindObject(space="$zone", name="$object", class_="station").to_xml()
+        self.assertIn("<find_object", xml)
+        self.assertIn('space="$zone"', xml)
+        self.assertIn('name="$object"', xml)
+        self.assertIn('class="station"', xml)
+
+    def test_get_ware_reservation(self):
+        xml = GetWareReservation(
+            object="$station",
+            ware="energycells",
+            type="buy",
+            result="$reserved"
+        ).to_xml()
+        self.assertIn("<get_ware_reservation", xml)
+        self.assertIn('object="$station"', xml)
+        self.assertIn('ware="energycells"', xml)
+        self.assertIn('type="buy"', xml)
+        self.assertIn('result="$reserved"', xml)
 
 
 if __name__ == "__main__":

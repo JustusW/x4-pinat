@@ -1,21 +1,53 @@
 """AI-script nodes for X4."""
 
 from .document import AIScript
-from .nodes import CreateOrder, Goto, Handler, Interrupts, Label, Order, Requires, Resume, Wait
+from .nodes import (
+    AddWareReservation,
+    Attention,
+    ClampTradeAmount,
+    ClearOrderFailure,
+    CreateOrder,
+    CreateTradeOrder,
+    Goto,
+    Handler,
+    IncludeInterruptActions,
+    Interrupts,
+    Label,
+    Order,
+    RemoveWareReservation,
+    Requires,
+    Resume,
+    RunScript,
+    SetOrderFailed,
+    SetOrderState,
+    SetOrderSyncpointReached,
+    Wait,
+)
 from .types import AINode, InterruptNode, OrderChildNode
 
 __all__ = [
     "AINode",
     "AIScript",
+    "AddWareReservation",
+    "Attention",
+    "ClampTradeAmount",
+    "ClearOrderFailure",
     "CreateOrder",
+    "CreateTradeOrder",
     "Goto",
     "Handler",
+    "IncludeInterruptActions",
     "InterruptNode",
     "Interrupts",
     "Label",
     "Order",
     "OrderChildNode",
+    "RemoveWareReservation",
     "Requires",
     "Resume",
+    "RunScript",
+    "SetOrderFailed",
+    "SetOrderState",
+    "SetOrderSyncpointReached",
     "Wait",
 ]

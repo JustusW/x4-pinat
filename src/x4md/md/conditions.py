@@ -292,3 +292,151 @@ class MatchGateDistance(ConditionNode):
             tag="match_gate_distance",
             attrs=normalize_attrs({"object": object, "min": min, "max": max}),
         )
+
+
+class Match(ConditionNode):
+    """Generic match condition for filtering.
+
+    Maps to X4 MD/AI <match> element. Used as child of Find/Requires
+    to filter results by various criteria.
+
+    Args:
+        owner: Match by owner
+        class_: Match by class
+        attention: Match by attention level
+        dock: Match docking status
+        relation: Match faction relation
+        space: Match space/zone
+        min: Minimum value
+        max: Maximum value
+
+    Example:
+        FindShip(
+            Match(owner="faction.player", class_="ship_arg_m")
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        owner: ExprLike | None = None,
+        class_: ExprLike | None = None,
+        attention: ExprLike | None = None,
+        dock: ExprLike | None = None,
+        relation: ExprLike | None = None,
+        space: ExprLike | None = None,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="match",
+            attrs=normalize_attrs({
+                "owner": owner,
+                "class": class_,
+                "attention": attention,
+                "dock": dock,
+                "relation": relation,
+                "space": space,
+                "min": min,
+                "max": max,
+            }),
+        )
+
+
+class EventObjectChangedSector(ConditionNode):
+    """Event triggered when an object changes sector.
+
+    Maps to X4 AI <event_object_changed_sector> element.
+
+    Args:
+        object: Object to monitor for sector changes
+
+    Example:
+        EventObjectChangedSector(object="this.ship")
+    """
+
+    def __init__(self, *, object: ExprLike) -> None:
+        super().__init__(
+            tag="event_object_changed_sector",
+            attrs=normalize_attrs({"object": object}),
+        )
+
+
+class MatchDistance(ConditionNode):
+    """Match objects by distance range.
+
+    Maps to X4 MD <match_distance> element.
+
+    Args:
+        object: Reference object to measure from
+        min: Minimum distance
+        max: Maximum distance
+
+    Example:
+        FindShip(
+            Match Distance(object="player.ship", max="20km")
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        object: ExprLike,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="match_distance",
+            attrs=normalize_attrs({"object": object, "min": min, "max": max}),
+        )
+
+
+class MatchDock(ConditionNode):
+    """Match docking status.
+
+    Maps to X4 MD <match_dock> element.
+
+    Args:
+        object: Docking object
+        state: Docking state to match
+
+    Example:
+        Match(dock="$station", state="docking")
+    """
+
+    def __init__(self, *, object: ExprLike | None = None, state: str | None = None) -> None:
+        super().__init__(
+            tag="match_dock",
+            attrs=normalize_attrs({"object": object, "state": state}),
+        )
+
+
+class MatchRelationTo(ConditionNode):
+    """Match faction relation.
+
+    Maps to X4 MD <match_relation_to> element.
+
+    Args:
+        object: Object to check relation to
+        comparison: Relation comparison
+        relation: Relation value
+
+    Example:
+        MatchRelationTo(object="faction.player", comparison="ge", relation="0")
+    """
+
+    def __init__(
+        self,
+        *,
+        object: ExprLike,
+        comparison: str | None = None,
+        relation: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="match_relation_to",
+            attrs=normalize_attrs({
+                "object": object,
+                "comparison": comparison,
+                "relation": relation,
+            }),
+        )

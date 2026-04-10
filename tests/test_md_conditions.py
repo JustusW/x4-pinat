@@ -128,5 +128,58 @@ class UIEventTests(unittest.TestCase):
         self.assertIn('control="confirm_button"', xml)
 
 
+class MatchConditionTests(unittest.TestCase):
+    """Test match conditions added in Phase 1."""
+
+    def test_match_buyer_basic(self):
+        from x4md import MatchBuyer
+        xml = MatchBuyer(friend=True).to_xml()
+        self.assertIn("<match_buyer", xml)
+        self.assertIn('friend="true"', xml)
+
+    def test_match_buyer_full(self):
+        from x4md import MatchBuyer
+        xml = MatchBuyer(
+            tradepartner="$faction",
+            space="$sector",
+            sector="$currentSector",
+            friend=True,
+            neutral=False,
+            enemy=False
+        ).to_xml()
+        self.assertIn('tradepartner="$faction"', xml)
+        self.assertIn('space="$sector"', xml)
+        self.assertIn('sector="$currentSector"', xml)
+        self.assertIn('friend="true"', xml)
+        self.assertIn('neutral="false"', xml)
+        self.assertIn('enemy="false"', xml)
+
+    def test_match_seller_basic(self):
+        from x4md import MatchSeller
+        xml = MatchSeller(friend=True, space="$zone").to_xml()
+        self.assertIn("<match_seller", xml)
+        self.assertIn('friend="true"', xml)
+        self.assertIn('space="$zone"', xml)
+
+    def test_match_seller_enemy(self):
+        from x4md import MatchSeller
+        xml = MatchSeller(enemy=True).to_xml()
+        self.assertIn('enemy="true"', xml)
+
+    def test_match_gate_distance_basic(self):
+        from x4md import MatchGateDistance
+        xml = MatchGateDistance(object="player.ship", max="3").to_xml()
+        self.assertIn("<match_gate_distance", xml)
+        self.assertIn('object="player.ship"', xml)
+        self.assertIn('max="3"', xml)
+
+    def test_match_gate_distance_range(self):
+        from x4md import MatchGateDistance
+        xml = MatchGateDistance(object="$station", min="2", max="5").to_xml()
+        self.assertIn('object="$station"', xml)
+        self.assertIn('min="2"', xml)
+        self.assertIn('max="5"', xml)
+
+
 if __name__ == "__main__":
     unittest.main()
