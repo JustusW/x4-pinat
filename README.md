@@ -1,45 +1,151 @@
 # X4-PINAT 🥬
 
-**X4-PINAT** (pronounced like the German word "Spinat" / English "spinach") - **PINAT** **I**s **N**ot **A** **T**ranspiler.
+<div align="center">
 
-A comprehensive, type-safe Python library for generating X4: Foundations Mission Director (MD) XML and AI-script XML from idiomatic Python code.
+**Python Interface for Navigating Aggressive Transpilation**
 
-## 🎯 Purpose & Scope
+*Pronounced like the German word "Spinat" (English: "spinach")*
 
-X4-PINAT is designed to make X4 mod development faster, safer, and more maintainable by replacing hand-written XML with Python code that provides:
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/yourusername/x4-pinat)
+[![Type Checked](https://img.shields.io/badge/type--checked-mypy-blue.svg)](http://mypy-lang.org/)
 
-- **IDE Autocomplete**: Full IntelliSense/autocomplete support for all MD and AI nodes
-- **Type Safety**: Strong typing prevents common XML errors at development time
-- **Refactoring Support**: Rename variables, extract functions, and reorganize code with IDE support
-- **Code Reuse**: Create reusable components, recipes, and patterns in Python
-- **Version Control**: Python code diffs are more readable than XML diffs
-- **Testing**: Write unit tests for your mod logic before deploying
-- **Documentation**: Inline docstrings and examples for every node type
+A comprehensive, type-safe Python library for generating [X4: Foundations](https://www.egosoft.com/games/x4/info_en.php) Mission Director (MD) XML and AI-script XML from idiomatic Python code.
 
-### What X4-PINAT Does
+[Features](#-features) •
+[Installation](#-installation) •
+[Quick Start](#-quick-start) •
+[Documentation](#-documentation) •
+[Examples](#-examples) •
+[Contributing](#-contributing)
 
-✅ **Transpiles** Python code to X4 MD/AI XML
-✅ **Provides** 100+ node classes covering the entire MD/AI schema
-✅ **Ensures** type-safe expression handling (text, paths, lists, tables, money, booleans)
-✅ **Includes** high-level "recipe" helpers for common patterns
-✅ **Supports** both Mission Director scripts (.xml) and AI-scripts (aiscripts/*.xml)
+</div>
 
-### What X4-PINAT Doesn't Do
+---
 
-❌ **Parse** existing XML back to Python (one-way transpiler only)
-❌ **Execute** or simulate X4 game logic
-❌ **Validate** game-specific IDs (wares, factions, sectors, etc.)
-❌ **Handle** UI definitions, t-files, or other X4 data formats
+## 🎯 What is X4-PINAT?
 
-## 🚀 Quick Start
+X4-PINAT transforms X4 mod development by replacing hand-written XML with **type-safe, IDE-friendly Python code**. Instead of wrestling with thousands of lines of XML, write clean Python that provides:
 
-### Installation
+- ✅ **Full IDE Autocomplete** - IntelliSense support for all MD and AI nodes
+- ✅ **Type Safety** - Catch errors at development time, not runtime
+- ✅ **Refactoring Support** - Rename, extract, and reorganize with confidence
+- ✅ **Code Reuse** - Create libraries of reusable mod components
+- ✅ **Better Version Control** - Readable diffs instead of XML chaos
+- ✅ **Unit Testing** - Test your mod logic before deployment
+- ✅ **Built-in Documentation** - Every node includes examples and docstrings
+
+### The Problem
+
+```xml
+<!-- Traditional X4 modding: Hand-written XML -->
+<cue name="FindTrades">
+  <conditions>
+    <event_game_loaded/>
+  </conditions>
+  <actions>
+    <find_buy_offer space="player.galaxy" result="$offers">
+      <match_buyer friend="true"/>
+    </find_buy_offer>
+    <do_for_each name="$offer" in="$offers">
+      <debug_text text="'Found: ' + $offer.ware"/>
+    </do_for_each>
+  </actions>
+</cue>
+```
+
+### The X4-PINAT Solution
+
+```python
+# Type-safe Python with IDE autocomplete
+from x4md import *
+
+Cue(
+    "FindTrades",
+    Conditions(EventGameLoaded()),
+    Actions(
+        FindBuyOffer(
+            MatchBuyer(friend=True),
+            space="player.galaxy",
+            result="$offers",
+        ),
+        DoForEach(
+            "$offer",
+            in_="$offers",
+            DebugText(TextExpr.quote("Found: {$offer.ware}")),
+        ),
+    ),
+)
+```
+
+---
+
+## ✨ Features
+
+### Complete X4 Coverage
+
+- **100+ Node Classes** covering the entire MD and AI-script schema
+- **Mission Director Nodes** - All actions, conditions, events, and control flow
+- **AI-Script Nodes** - Complete support for ship AI behavior
+- **Trading Systems** - Full support for buy/sell offers, ware reservations, trade orders
+- **Navigation** - Position creation, jump path calculation, docking
+- **Match Filters** - Sophisticated filtering for find operations
+
+### Type-Safe Expression System
+
+```python
+# Strongly-typed expressions prevent common errors
+TextExpr.quote("Hello")              # => "'Hello'"
+PathExpr.of("player", "ship")        # => "player.ship"
+ListExpr.of("$var1", "$var2")        # => "[$var1, $var2]"
+TableExpr.of(                        # => "table[$Ship = $myShip, $Credits = 1000]"
+    TableEntry("Ship", "$myShip"),
+    TableEntry("Credits", 1000),
+)
+MoneyExpr.of(50000)                  # => "50000Cr"
+BoolExpr.TRUE                        # => "true"
+```
+
+### High-Level Recipe Helpers
+
+Simplify common patterns with recipe helpers:
+
+```python
+# Ensure a global list exists on first run
+EnsureList("$ActiveTrades")
+
+# Initialize globals on game load
+InitializeGlobalsCue(
+    SetValue("$version", exact="1.0.0"),
+    CreateList(name="$traders"),
+)
+
+# Guard clause with error message
+Guard("$initialized", "System not ready")
+
+# Signal router pattern for multiple handlers
+SignalRouterCue("TradeRouter", ["ProcessTrade", "CancelTrade"])
+```
+
+### Production-Ready Quality
+
+- **100% Test Coverage** - 98+ comprehensive unit tests
+- **Type Checked** - Full mypy compatibility
+- **Immutable Nodes** - Frozen dataclasses prevent accidental mutations
+- **Zero Dependencies** - Pure Python 3.11+ (testing dependencies optional)
+
+---
+
+## 📦 Installation
+
+### From PyPI (when published)
 
 ```bash
 pip install x4-pinat
 ```
 
-*Note: Not yet published to PyPI. For now, clone and install locally:*
+### From Source
 
 ```bash
 git clone https://github.com/yourusername/x4-pinat.git
@@ -47,17 +153,20 @@ cd x4-pinat
 pip install -e .
 ```
 
-### Basic Example
+### Requirements
+
+- Python 3.11 or higher
+- No runtime dependencies!
+
+---
+
+## 🚀 Quick Start
+
+### Hello World
 
 ```python
-from x4md import (
-    MDScript, Cues, Cue,
-    Conditions, EventGameLoaded,
-    Actions, DebugText,
-    TextExpr,
-)
+from x4md import MDScript, Cues, Cue, Conditions, Actions, EventGameLoaded, DebugText, TextExpr
 
-# Create a simple MD script
 script = MDScript(
     name="HelloWorld",
     cues=Cues(
@@ -65,7 +174,7 @@ script = MDScript(
             "Init",
             Conditions(EventGameLoaded()),
             Actions(
-                DebugText(TextExpr.quote("Hello from Python!"))
+                DebugText(TextExpr.quote("Hello from X4-PINAT!"))
             ),
         )
     ),
@@ -85,14 +194,28 @@ print(script.to_document())
         <event_game_loaded/>
       </conditions>
       <actions>
-        <debug_text text="'Hello from Python!'"/>
+        <debug_text text="'Hello from X4-PINAT!'"/>
       </actions>
     </cue>
   </cues>
 </mdscript>
 ```
 
-### Trading Example (GalaxyTrader-style)
+### Save to File
+
+```python
+# Save to your X4 extensions folder
+output_path = "path/to/X4/extensions/mymod/md/mymod.xml"
+with open(output_path, 'w', encoding='utf-8') as f:
+    f.write(script.to_document())
+```
+
+---
+
+## 📚 Examples
+
+<details>
+<summary><b>📈 Trading Scanner (GalaxyTrader-style)</b></summary>
 
 ```python
 from x4md import *
@@ -100,34 +223,192 @@ from x4md import *
 script = MDScript(
     name="TradeScanner",
     cues=Cues(
+        # Initialize on game load
+        InitializeGlobalsCue(
+            CreateList(name="$tradeOffers"),
+            SetValue("$scanInterval", exact="30s"),
+        ),
+
+        # Scan for profitable trades every 30 seconds
         Cue(
             "ScanForTrades",
             Conditions(
-                EventGameLoaded()
+                EventCueSignalled(),
+                CheckValue("$tradeOffers != null"),
             ),
             Actions(
-                CreateList(name="$offers"),
+                # Find buy offers from friendly factions
                 FindBuyOffer(
-                    MatchBuyer(friend=True),
+                    MatchBuyer(friend=True, space="player.galaxy"),
                     space="player.galaxy",
-                    wares="[$energycells, $ore]",
-                    result="$offers",
+                    wares="[$energycells, $ore, $foodrations]",
+                    result="$tradeOffers",
                     multiple=True,
                 ),
+
+                # Sort by profitability
+                SortTrades(
+                    tradelist="$tradeOffers",
+                    sorter="@$trade.profit",
+                    result="$sortedTrades",
+                ),
+
+                # Log the best trades
                 DoForEach(
-                    "$offer",
-                    in_="$offers",
-                    DebugText(TextExpr.quote("Found trade: {$offer.ware}")),
+                    "$trade",
+                    in_="$sortedTrades",
+                    counter="$i",
+                    DoIf(
+                        "$i le 5",  # Only log top 5
+                        DebugText(TextExpr.quote(
+                            "Trade {$i}: {$trade.ware} - {$trade.profit}Cr profit"
+                        )),
+                    ),
                 ),
             ),
-        )
+        ),
     ),
 )
 ```
 
-## 📦 Complete Feature Set
+</details>
 
-### Mission Director Nodes (80+ nodes)
+<details>
+<summary><b>🤖 AI Trading Script</b></summary>
+
+```python
+from x4md import AIScript, Order, Requires, Wait, RunScript, AddWareReservation
+
+script = AIScript(
+    name="trade.routine",
+    Order(
+        "TradeRoutine",
+        name="{20001,1101}",  # Trade routine name from t-file
+        description="{20001,1102}",
+        category="trade",
+        infinite=True,
+
+        # Required conditions
+        Requires(
+            Match(class_="ship_l", owner="faction.player"),
+        ),
+
+        # Main trade loop
+        RunScript(name="'move.findtrade'"),
+
+        Wait(exact="5s"),
+
+        AddWareReservation(
+            object="this.ship",
+            ware="$targetWare",
+            amount="$tradeAmount",
+            type="buy",
+        ),
+
+        RunScript(name="'move.dockat'", Param(name="destination", value="$tradeStation")),
+    ),
+)
+```
+
+</details>
+
+<details>
+<summary><b>🎯 Event-Driven System</b></summary>
+
+```python
+from x4md import *
+
+script = MDScript(
+    name="ShipMonitor",
+    cues=Cues(
+        Cue(
+            "WatchPlayerShip",
+            Conditions(
+                EventGameLoaded(),
+            ),
+            Actions(
+                CreateList(name="$visitedSectors"),
+            ),
+            # Child cue that monitors events
+            Cue(
+                "OnSectorChange",
+                Conditions(
+                    EventObjectChangedSector(object="player.ship"),
+                ),
+                Actions(
+                    AppendToList(name="$visitedSectors", exact="player.ship.sector"),
+                    ShowNotification(
+                        text=TextExpr.quote("Entered sector: {player.ship.sector.name}"),
+                        caption=TextExpr.quote("Navigation"),
+                    ),
+                ),
+                instantiate=True,  # Re-trigger on every sector change
+            ),
+        ),
+    ),
+)
+```
+
+</details>
+
+<details>
+<summary><b>🔄 Advanced Pattern: Signal Router</b></summary>
+
+```python
+from x4md import *
+
+# Create a central signal router for multiple sub-systems
+script = MDScript(
+    name="ModuleCoordinator",
+    cues=Cues(
+        # Signal router distributes events to handlers
+        SignalRouterCue(
+            "CoreRouter",
+            handler_names=["InitModule", "UpdateModule", "ShutdownModule"],
+        ),
+
+        # Initialization handler
+        Cue(
+            "InitModule",
+            Conditions(EventCueSignalled()),
+            Actions(
+                DebugText(TextExpr.quote("Initializing modules...")),
+                # Your init logic here
+            ),
+        ),
+
+        # Update handler
+        Cue(
+            "UpdateModule",
+            Conditions(EventCueSignalled()),
+            Actions(
+                # Your update logic here
+            ),
+        ),
+
+        # Shutdown handler
+        Cue(
+            "ShutdownModule",
+            Conditions(EventCueSignalled()),
+            Actions(
+                DebugText(TextExpr.quote("Shutting down modules...")),
+                # Your cleanup logic here
+            ),
+        ),
+    ),
+)
+```
+
+</details>
+
+---
+
+## 📖 Documentation
+
+### Complete Node Reference
+
+<details>
+<summary><b>Mission Director Nodes (80+ nodes)</b></summary>
 
 **Document Structure:**
 - `MDScript`, `Cues`, `Cue`, `Library`, `OnAbort`
@@ -142,10 +423,10 @@ script = MDScript(
 **Data Management:**
 - `SetValue`, `RemoveValue`
 - `CreateList`, `AppendToList`, `RemoveFromList`, `AppendListElements`
-- `ShuffleList`, `SortList`, `SortTrades` (GalaxyTrader-specific)
+- `ShuffleList`, `SortList`, `SortTrades`
 
-**Find/Query Actions** (Critical for trading mods):
-- `FindBuyOffer`, `FindSellOffer` (with `MatchBuyer`, `MatchSeller`)
+**Find/Query Actions** *(Critical for trading mods)*:
+- `FindBuyOffer`, `FindSellOffer` with `MatchBuyer`, `MatchSeller`
 - `FindStation`, `FindSector`, `FindGate`, `FindDockingbay`
 - `FindShip`, `FindObject`
 - `GetWareReservation`
@@ -171,18 +452,23 @@ script = MDScript(
 **Cues:**
 - `SignalCueAction`, `SignalCueInstantly`, `SignalObjects`, `CancelCue`
 
-**Events** (17+ event types):
+**Events** (17+ types):
 - Game: `EventGameLoaded`, `EventGameSaved`, `EventPlayerCreated`
 - Objects: `EventObjectDestroyed`, `EventObjectOrderReady`, `EventObjectChangedZone`, `EventObjectChangedSector`
 - Cues: `EventCueSignalled`, `EventObjectSignalled`
 - UI: `EventUITriggered`
 - Player: `EventPlayerAssignedHiredActor`
-- Conditions: `CheckValue`, `CheckAny`, `CheckAll`
 
-**Delays:**
-- `Delay` (exact/min/max timing)
+**Conditions:**
+- `CheckValue`, `CheckAny`, `CheckAll`
 
-### AI-Script Nodes (20+ nodes)
+**Timing:**
+- `Delay` (exact/min/max)
+
+</details>
+
+<details>
+<summary><b>AI-Script Nodes (24+ nodes)</b></summary>
 
 **Document:**
 - `AIScript`, `Order`, `Requires`, `Interrupts`, `Handler`
@@ -205,139 +491,226 @@ script = MDScript(
 **Commands:**
 - `SetCommand`, `SetCommandAction`
 
-### Expression Types (Type-Safe)
+</details>
+
+<details>
+<summary><b>Expression Types (Type-Safe)</b></summary>
+
+All expressions are **strongly typed** and provide IDE autocomplete:
 
 ```python
-from x4md import TextExpr, PathExpr, ListExpr, TableExpr, MoneyExpr, BoolExpr
+from x4md import TextExpr, PathExpr, ListExpr, TableExpr, MoneyExpr, BoolExpr, Dynamic
 
-# Text with proper quoting
+# Text - automatic quoting
 TextExpr.quote("Hello")  # => "'Hello'"
 
-# Paths to game objects
-PathExpr.of("player", "ship")  # => "player.ship"
+# Paths - dot-notation
+PathExpr.of("player", "ship", "sector")  # => "player.ship.sector"
 
-# Lists
-ListExpr.of("ware.energycells", "ware.ore")  # => "[ware.energycells, ware.ore]"
+# Lists - bracket notation
+ListExpr.of("item1", "item2")  # => "[item1, item2]"
 
-# Tables
+# Tables - key-value pairs
 TableExpr.of(
-    TableEntry("Ship", "$myShip"),
-    TableEntry("Credits", 1000),
-)  # => "table[$Ship = $myShip, $Credits = 1000]"
+    TableEntry("Key", "value"),
+    TableEntry("Number", 42),
+)  # => "table[$Key = value, $Number = 42]"
 
-# Money
-MoneyExpr.of(50000)  # => "50000Cr"
+# Money - automatic Cr suffix
+MoneyExpr.of(100000)  # => "100000Cr"
 
 # Booleans
-BoolExpr.TRUE  # => "true"
+BoolExpr.TRUE   # => "true"
 BoolExpr.FALSE  # => "false"
+
+# Dynamic values (pass through without quotes)
+Dynamic("$myVariable")  # => "$myVariable"
 ```
 
-### Recipe Helpers (High-Level Patterns)
+</details>
 
-Simplify common patterns:
+<details>
+<summary><b>Recipe Helpers (High-Level Patterns)</b></summary>
+
+Pre-built patterns for common use cases:
 
 ```python
 from x4md import *
 
-# Ensure a global counter exists
-EnsureCounter("TradesCompleted", initial=0)
+# Ensure global variables exist
+EnsureCounter("TradeCount", initial=0)
+EnsureList("$ActiveShips")
+EnsureTable("$ShipRegistry")
+EnsurePath("$PlayerHQ", default="null")
 
-# Ensure a global list exists
-EnsureList("$ActiveTrades")
-
-# Conditional return
+# Conditional flow
 ReturnIf("$error")
-
-# Abort cue if condition
 AbortIf("not $initialized")
-
-# Guard clause
 Guard("$ready", "System not ready")
 
-# Initialize globals on game load
+# Initialization patterns
 InitializeGlobalsCue(
-    SetValue("$version", exact="1.0.0"),
-    CreateList(name="$traders"),
+    SetValue("$modVersion", exact="1.0.0"),
+    CreateList(name="$data"),
 )
+GameLoadedCue("OnGameLoad", Actions(...))
+PlayerCreatedCue("OnPlayerCreate", Actions(...))
 
-# Signal router pattern
-SignalRouterCue("TradeRouter", ["ProcessTrade", "CancelTrade"])
+# Signal routing
+SignalRouterCue("EventRouter", ["Handler1", "Handler2", "Handler3"])
+CueSignalledCue("MyHandler", Actions(...))
+
+# Library registration
+RequestRegistryLibrary()
 ```
+
+</details>
+
+---
 
 ## 🏗️ Architecture
 
-X4-PINAT uses a layered architecture:
+X4-PINAT uses a clean, layered architecture:
 
-1. **Core XML** (`x4md.core`): Low-level XML element generation
-2. **Expressions** (`x4md.expressions`): Type-safe expression rendering
-3. **Node Types** (`x4md.md.types`, `x4md.x4ai.types`): Base classes for MD and AI nodes
-4. **Node Implementations** (`x4md.md.*`, `x4md.x4ai.*`): All 100+ concrete node classes
-5. **Recipes** (`x4md.md.recipes`): High-level helper patterns
+```
+┌─────────────────────────────────────────┐
+│          Your Python Code               │
+│  (Type-safe, IDE-friendly mod logic)    │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│       Recipe Helpers (md.recipes)       │
+│   (High-level patterns & utilities)     │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│     Node Implementations (md/x4ai)      │
+│   (100+ concrete MD & AI node classes)  │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│  Expression System (expressions.py)     │
+│ (Type-safe expression rendering)        │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│       Core XML (core/xml.py)            │
+│    (Low-level XML generation)           │
+└──────────────┬──────────────────────────┘
+               │
+               ▼
+         X4 MD/AI XML
+```
 
-All nodes are **immutable** (frozen dataclasses) for safety and **provide IDE autocomplete** through explicit constructors.
+**Key Design Principles:**
 
-## 📊 Coverage
+- **Immutability** - All nodes are frozen dataclasses
+- **Type Safety** - Strong typing throughout with mypy compatibility
+- **Composability** - Nodes compose naturally like building blocks
+- **Zero Runtime Dependencies** - Pure Python 3.11+
+- **100% Test Coverage** - Every node is thoroughly tested
 
-X4-PINAT provides **100% coverage** of nodes used in the GalaxyTrader mod (45 MD files + 25 AI-scripts, ~45,000 lines of XML).
-
-### Implementation Phases (Completed)
-
-- ✅ **Phase 1** (Trading Foundation): FindBuyOffer, FindSellOffer, GetWareReservation, Match conditions, SortTrades - **85% coverage**
-- ✅ **Phase 2** (AI-Script Completion): Ware reservations, order management, RunScript, CreateTradeOrder - **95% coverage**
-- ✅ **Phase 3** (Utilities): AppendListElements, CreatePosition, GetJumpPath, SetCommand, Delay - **98% coverage**
-- ✅ **Phase 4** (Edge Cases): Additional match conditions, command actions - **100% coverage**
+---
 
 ## 🧪 Testing
 
-X4-PINAT maintains **100% test coverage** with 98+ unit tests.
+X4-PINAT maintains **100% test coverage** with comprehensive unit tests.
 
-Run tests:
+### Run Tests
+
 ```bash
+# Run all tests
 pytest tests/
-```
 
-Run with coverage:
-```bash
+# Run with verbose output
+pytest tests/ -v
+
+# Run specific test file
+pytest tests/test_md_actions.py
+
+# Run with coverage report
 coverage run -m pytest tests/
 coverage report
 ```
 
-## 📖 Documentation
+---
 
-See [AI_DEVELOPMENT_GUIDE.md](AI_DEVELOPMENT_GUIDE.md) for:
-- Coding standards
-- Implementation patterns
-- Testing requirements
-- Common pitfalls
-- Quick reference for adding new nodes
+## 📊 Coverage & Battle-Testing
 
-## 🤝 Contributing
+X4-PINAT provides **100% coverage** of nodes used in real-world mods:
 
-Contributions are welcome! Please:
+### GalaxyTrader Mod (Full Coverage)
 
-1. Follow the patterns in `AI_DEVELOPMENT_GUIDE.md`
-2. Maintain 100% test coverage
-3. Use type hints throughout
-4. Document all public APIs with docstrings and examples
-5. Run `pytest` and ensure all tests pass
+- ✅ **45 MD files** (~45,000 lines of XML)
+- ✅ **25 AI-script files**
+- ✅ **All trading logic** - Buy/sell offers, ware reservations, trade orders
+- ✅ **All AI behaviors** - Ship movement, docking, order management
+- ✅ **All find operations** - Stations, sectors, gates, ships, objects
+- ✅ **All match conditions** - Buyer/seller filtering, distance checks, gate jumps
 
-## 📜 License
+### Implementation Phases
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+| Phase | Focus | Nodes | Coverage |
+|-------|-------|-------|----------|
+| ✅ Phase 1 | Trading Foundation | 12 nodes | 85% |
+| ✅ Phase 2 | AI-Script Completion | 13 nodes | 95% |
+| ✅ Phase 3 | Utilities & Polish | 6 nodes | 98% |
+| ✅ Phase 4 | Edge Cases | 3 nodes | **100%** |
 
-## 🙏 Acknowledgments
-
-- Egosoft for creating X4: Foundations
-- The X4 modding community for documentation and examples
-- GalaxyTrader mod by Nividica for providing comprehensive test cases
-
-## 🔗 Related Projects
-
-- [X4: Foundations](https://www.egosoft.com/games/x4/info_en.php)
-- [X4 Wiki - Mission Director](https://www.x4wiki.com/)
-- [GalaxyTrader Mod](https://www.nexusmods.com/x4foundations/mods/)
+**Total: 34 new nodes** added across all phases to achieve complete coverage.
 
 ---
 
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+### Quick Start
+
+```bash
+git clone https://github.com/yourusername/x4-pinat.git
+cd x4-pinat
+pip install -e ".[test]"
+pytest tests/
+```
+
+### Guidelines
+
+1. Follow the patterns in [AI_DEVELOPMENT_GUIDE.md](AI_DEVELOPMENT_GUIDE.md)
+2. Maintain 100% test coverage
+3. Use type hints throughout
+4. Document all public APIs
+5. Run tests before submitting PRs
+
+---
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Egosoft** for X4: Foundations
+- **X4 Modding Community** for documentation and support
+- **GalaxyTrader Mod** by Nividica for comprehensive test cases
+
+---
+
+## 🔗 Resources
+
+- [X4: Foundations](https://www.egosoft.com/games/x4/info_en.php)
+- [X4 Wiki - Mission Director](https://www.x4wiki.com/)
+- [Egosoft Forums](https://forum.egosoft.com/)
+- [X4 Subreddit](https://www.reddit.com/r/X4Foundations/)
+
+---
+
+<div align="center">
+
 **X4-PINAT** - Making X4 mod development as smooth as spinach! 🥬
+
+[⬆ Back to Top](#x4-pinat-)
+
+</div>
