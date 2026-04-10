@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .common import normalize_attrs
-from .types import CueChildNode, MDNode, ParamNode
+from .types import ActionNode, CueChildNode, MDNode, ParamNode
 
 
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -81,3 +81,28 @@ class InputParam(ParamNode):
             tag="input_param",
             attrs=normalize_attrs({"name": name, "value": value}),
         )
+
+
+class OnAbort(CueChildNode):
+    """Actions to execute when a cue is aborted.
+
+    Maps to X4 MD <on_abort> element. Used within cues to define cleanup
+    or error handling actions that run when the cue is cancelled.
+
+    Args:
+        *children: Action nodes to execute on abort
+
+    Example:
+        Cue(
+            "TradingCue",
+            Conditions(...),
+            Actions(...),
+            OnAbort(
+                DebugText("Trading cue was aborted"),
+                SetValue(name="$trading", exact=False)
+            )
+        )
+    """
+
+    def __init__(self, *children: ActionNode) -> None:
+        super().__init__(tag="on_abort", children=list(children))

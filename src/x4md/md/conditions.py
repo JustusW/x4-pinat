@@ -167,3 +167,128 @@ class EventUITriggered(ConditionNode):
             tag="event_ui_triggered",
             attrs=normalize_attrs({"screen": screen, "control": control}),
         )
+
+
+class MatchBuyer(ConditionNode):
+    """Match buyer criteria for trade offers.
+
+    Maps to X4 MD <match_buyer> element. Used as child of FindBuyOffer
+    to filter results by buyer characteristics.
+
+    Args:
+        tradepartner: Trade partner to match
+        space: Space to search in
+        sector: Specific sector to match
+        friend: Filter by friendly status
+        neutral: Filter by neutral status
+        enemy: Filter by enemy status
+
+    Example:
+        FindBuyOffer(
+            space="$sector",
+            wares="[$energycells]",
+            MatchBuyer(friend=True)
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        tradepartner: ExprLike | None = None,
+        space: ExprLike | None = None,
+        sector: ExprLike | None = None,
+        friend: bool | None = None,
+        neutral: bool | None = None,
+        enemy: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="match_buyer",
+            attrs=normalize_attrs(
+                {
+                    "tradepartner": tradepartner,
+                    "space": space,
+                    "sector": sector,
+                    "friend": friend,
+                    "neutral": neutral,
+                    "enemy": enemy,
+                }
+            ),
+        )
+
+
+class MatchSeller(ConditionNode):
+    """Match seller criteria for trade offers.
+
+    Maps to X4 MD <match_seller> element. Used as child of FindSellOffer
+    to filter results by seller characteristics.
+
+    Args:
+        tradepartner: Trade partner to match
+        space: Space to search in
+        sector: Specific sector to match
+        friend: Filter by friendly status
+        neutral: Filter by neutral status
+        enemy: Filter by enemy status
+
+    Example:
+        FindSellOffer(
+            space="$sector",
+            wares="[$ore]",
+            MatchSeller(friend=True, space="$currentzone")
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        tradepartner: ExprLike | None = None,
+        space: ExprLike | None = None,
+        sector: ExprLike | None = None,
+        friend: bool | None = None,
+        neutral: bool | None = None,
+        enemy: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="match_seller",
+            attrs=normalize_attrs(
+                {
+                    "tradepartner": tradepartner,
+                    "space": space,
+                    "sector": sector,
+                    "friend": friend,
+                    "neutral": neutral,
+                    "enemy": enemy,
+                }
+            ),
+        )
+
+
+class MatchGateDistance(ConditionNode):
+    """Match objects by gate jump distance.
+
+    Maps to X4 MD <match_gate_distance> element. Used as child of Find
+    actions to filter results by distance in gate jumps.
+
+    Args:
+        object: Reference object to measure from
+        min: Minimum gate distance (inclusive)
+        max: Maximum gate distance (inclusive)
+
+    Example:
+        FindStation(
+            space="player.galaxy",
+            MatchGateDistance(object="player.ship", max=3)
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        object: ExprLike,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="match_gate_distance",
+            attrs=normalize_attrs({"object": object, "min": min, "max": max}),
+        )

@@ -527,3 +527,535 @@ class RaiseLuaEvent(ActionNode):
             tag="raise_lua_event",
             attrs=normalize_attrs({"name": name, "param": param}),
         )
+
+
+class SetSkill(ActionNode):
+    """Set skill level for an NPC.
+
+    Maps to X4 MD <set_skill> element.
+
+    Args:
+        object: NPC to modify
+        skill: Skill type to set
+        exact: Exact skill value
+        value: Skill value
+        min: Minimum skill value
+        max: Maximum skill value
+        comment: Optional comment
+
+    Example:
+        SetSkill(object="$pilot", skill="piloting", exact=3)
+    """
+
+    def __init__(
+        self,
+        *,
+        object: ExprLike,
+        skill: str,
+        exact: ExprLike | None = None,
+        value: ExprLike | None = None,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+        comment: str | None = None,
+    ) -> None:
+        super().__init__(
+            tag="set_skill",
+            attrs=normalize_attrs({
+                "object": object,
+                "skill": skill,
+                "exact": exact,
+                "value": value,
+                "min": min,
+                "max": max,
+                "comment": comment,
+            }),
+        )
+
+
+class CreateList(ActionNode):
+    """Create a new list variable.
+
+    Maps to X4 MD <create_list name="..."/> element.
+
+    Args:
+        name: Name of list variable to create
+
+    Example:
+        CreateList(name="$candidates")
+    """
+
+    def __init__(self, *, name: str) -> None:
+        super().__init__(tag="create_list", attrs=normalize_attrs({"name": name}))
+
+
+class ShuffleList(ActionNode):
+    """Randomize the order of a list.
+
+    Maps to X4 MD <shuffle_list list="..."/> element.
+
+    Args:
+        list: List variable to shuffle
+
+    Example:
+        ShuffleList(list="$trades")
+    """
+
+    def __init__(self, *, list: str) -> None:
+        super().__init__(tag="shuffle_list", attrs=normalize_attrs({"list": list}))
+
+
+class SortList(ActionNode):
+    """Sort a list by criteria.
+
+    Maps to X4 MD <sort_list> element.
+
+    Args:
+        list: List variable to sort
+        *children: Sort criteria nodes
+
+    Example:
+        SortList(list="$stations")
+    """
+
+    def __init__(self, *, list: str, *children: ActionNode) -> None:
+        super().__init__(
+            tag="sort_list",
+            attrs=normalize_attrs({"list": list}),
+            children=list(children) if children else [],
+        )
+
+
+class EditOrderParam(ActionNode):
+    """Edit a parameter of an existing order.
+
+    Maps to X4 MD <edit_order_param> element.
+
+    Args:
+        object: Object whose order to modify
+        param: Parameter name to edit
+        value: New parameter value
+
+    Example:
+        EditOrderParam(object="$ship", param="maxbuy", value=10)
+    """
+
+    def __init__(self, *, object: ExprLike, param: str, value: ExprLike) -> None:
+        super().__init__(
+            tag="edit_order_param",
+            attrs=normalize_attrs({"object": object, "param": param, "value": value}),
+        )
+
+
+class SubstituteText(ActionNode):
+    """Perform text substitution with variables.
+
+    Maps to X4 MD <substitute_text> element.
+
+    Args:
+        text: Text template with placeholders
+        source: Source object for substitution
+        result: Variable to store result
+
+    Example:
+        SubstituteText(text="Ship: {ship.name}", source="$ship", result="$message")
+    """
+
+    def __init__(self, *, text: ExprLike, source: ExprLike | None = None, result: str | None = None) -> None:
+        super().__init__(
+            tag="substitute_text",
+            attrs=normalize_attrs({"text": text, "source": source, "result": result}),
+        )
+
+
+class RewardPlayer(ActionNode):
+    """Give rewards to the player.
+
+    Maps to X4 MD <reward_player> element.
+
+    Args:
+        money: Money amount to give
+        notificationtext: Optional notification text
+
+    Example:
+        RewardPlayer(money=MoneyExpr.of(10000), notificationtext=TextExpr.quote("Bonus!"))
+    """
+
+    def __init__(self, *, money: ExprLike | None = None, notificationtext: ExprLike | None = None) -> None:
+        super().__init__(
+            tag="reward_player",
+            attrs=normalize_attrs({"money": money, "notificationtext": notificationtext}),
+        )
+
+
+# Find/Query Actions - these are complex with child match nodes
+
+class FindBuyOffer(ActionNode):
+    """Find buy offers matching criteria.
+
+    Maps to X4 MD <find_buy_offer> element.
+
+    Args:
+        *children: Match condition nodes
+        space: Space/sector to search
+        wares: Wares to search for
+        tradepartner: Ship for trade partner checks
+        result: Variable to store result
+        multiple: Whether to find multiple results
+
+    Example:
+        FindBuyOffer(
+            space="$sector",
+            tradepartner="$ship",
+            result="$buyOffers",
+            multiple=True,
+        )
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        space: ExprLike | None = None,
+        wares: ExprLike | None = None,
+        tradepartner: ExprLike | None = None,
+        result: str | None = None,
+        multiple: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_buy_offer",
+            attrs=normalize_attrs({
+                "space": space,
+                "wares": wares,
+                "tradepartner": tradepartner,
+                "result": result,
+                "multiple": multiple,
+            }),
+            children=list(children),
+        )
+
+
+class FindSellOffer(ActionNode):
+    """Find sell offers matching criteria.
+
+    Maps to X4 MD <find_sell_offer> element.
+
+    Args:
+        *children: Match condition nodes
+        space: Space/sector to search
+        wares: Wares to search for
+        tradepartner: Ship for trade partner checks
+        result: Variable to store result
+        multiple: Whether to find multiple results
+
+    Example:
+        FindSellOffer(
+            space="$sector",
+            wares="[$ware]",
+            result="$sellOffers",
+            multiple=True,
+        )
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        space: ExprLike | None = None,
+        wares: ExprLike | None = None,
+        tradepartner: ExprLike | None = None,
+        result: str | None = None,
+        multiple: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_sell_offer",
+            attrs=normalize_attrs({
+                "space": space,
+                "wares": wares,
+                "tradepartner": tradepartner,
+                "result": result,
+                "multiple": multiple,
+            }),
+            children=list(children),
+        )
+
+
+class FindStation(ActionNode):
+    """Find stations matching criteria.
+
+    Maps to X4 MD <find_station> element.
+
+    Args:
+        *children: Match condition nodes
+        name: Variable to store result
+        space: Space/sector to search
+        multiple: Whether to find multiple results
+        tradesknownto: Faction that knows trades
+        sortbydistanceto: Object to sort by distance from
+
+    Example:
+        FindStation(
+            name="$stations",
+            space="player.galaxy",
+            multiple=True,
+            tradesknownto="faction.player",
+        )
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        name: str | None = None,
+        space: ExprLike | None = None,
+        multiple: bool | None = None,
+        tradesknownto: ExprLike | None = None,
+        sortbydistanceto: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_station",
+            attrs=normalize_attrs({
+                "name": name,
+                "space": space,
+                "multiple": multiple,
+                "tradesknownto": tradesknownto,
+                "sortbydistanceto": sortbydistanceto,
+            }),
+            children=list(children),
+        )
+
+
+class FindSector(ActionNode):
+    """Find sectors matching criteria.
+
+    Maps to X4 MD <find_sector> element.
+
+    Args:
+        *children: Match condition nodes
+        name: Variable to store result
+        space: Space to search
+        multiple: Whether to find multiple results
+
+    Example:
+        FindSector(name="$sectors", space="player.galaxy", multiple=True)
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        name: str | None = None,
+        space: ExprLike | None = None,
+        multiple: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_sector",
+            attrs=normalize_attrs({"name": name, "space": space, "multiple": multiple}),
+            children=list(children),
+        )
+
+
+class FindGate(ActionNode):
+    """Find gates matching criteria.
+
+    Maps to X4 MD <find_gate> element.
+
+    Args:
+        *children: Match condition nodes
+        name: Variable to store result
+        space: Space/sector to search
+        multiple: Whether to find multiple results
+
+    Example:
+        FindGate(name="$gates", space="$sector", multiple=True)
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        name: str | None = None,
+        space: ExprLike | None = None,
+        multiple: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_gate",
+            attrs=normalize_attrs({"name": name, "space": space, "multiple": multiple}),
+            children=list(children),
+        )
+
+
+class FindDockingbay(ActionNode):
+    """Find docking bays matching criteria.
+
+    Maps to X4 MD <find_dockingbay> element.
+
+    Args:
+        *children: Match condition nodes
+        name: Variable to store result
+        object: Object to search for docking bays
+        checkoperational: Whether to check if operational
+        multiple: Whether to find multiple results
+
+    Example:
+        FindDockingbay(name="$dock", object="$station", checkoperational=True)
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        name: str | None = None,
+        object: ExprLike | None = None,
+        checkoperational: bool | None = None,
+        multiple: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_dockingbay",
+            attrs=normalize_attrs({
+                "name": name,
+                "object": object,
+                "checkoperational": checkoperational,
+                "multiple": multiple,
+            }),
+            children=list(children),
+        )
+
+
+class FindShip(ActionNode):
+    """Find ships matching criteria.
+
+    Maps to X4 MD <find_ship> element.
+
+    Args:
+        *children: Match condition nodes
+        name: Variable to store result
+        space: Space/sector to search
+        multiple: Whether to find multiple results
+
+    Example:
+        FindShip(name="$ships", space="$sector", multiple=True)
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        name: str | None = None,
+        space: ExprLike | None = None,
+        multiple: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_ship",
+            attrs=normalize_attrs({"name": name, "space": space, "multiple": multiple}),
+            children=list(children),
+        )
+
+
+class FindObject(ActionNode):
+    """Find objects matching criteria.
+
+    Maps to X4 MD <find_object> element.
+
+    Args:
+        *children: Match condition nodes
+        name: Variable to store result
+        space: Space/sector to search
+        multiple: Whether to find multiple results
+        class_: Object class to find
+
+    Example:
+        FindObject(name="$objects", space="$sector", class_="station")
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        name: str | None = None,
+        space: ExprLike | None = None,
+        multiple: bool | None = None,
+        class_: str | None = None,
+    ) -> None:
+        super().__init__(
+            tag="find_object",
+            attrs=normalize_attrs({
+                "name": name,
+                "space": space,
+                "multiple": multiple,
+                "class": class_,
+            }),
+            children=list(children),
+        )
+
+
+class GetWareReservation(ActionNode):
+    """Get ware reservation amount.
+
+    Maps to X4 MD <get_ware_reservation> element.
+
+    Args:
+        object: Object with reservations
+        ware: Ware to check
+        type: Reservation type ('buy' or 'sell')
+        virtual: Whether to check virtual reservations
+        result: Variable to store result
+
+    Example:
+        GetWareReservation(
+            object="$station",
+            ware="$ware",
+            type="sell",
+            virtual=False,
+            result="$reserved",
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        object: ExprLike,
+        ware: ExprLike,
+        type: str,
+        virtual: bool | None = None,
+        result: str,
+    ) -> None:
+        super().__init__(
+            tag="get_ware_reservation",
+            attrs=normalize_attrs({
+                "object": object,
+                "ware": ware,
+                "type": type,
+                "virtual": virtual,
+                "result": result,
+            }),
+        )
+
+
+class SortTrades(ActionNode):
+    """Sort trade offers by profitability and other criteria.
+
+    Maps to X4 MD <sort_trades> element. GalaxyTrader-specific action
+    that sorts trade offers to prioritize the most profitable routes.
+
+    Args:
+        tradelist: List of trade offers to sort
+        sorter: Sorting criteria/expression
+        result: Variable name to store sorted list
+
+    Example:
+        SortTrades(
+            tradelist="$availableTrades",
+            sorter="@$trade.profit",
+            result="$sortedTrades"
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        tradelist: ExprLike,
+        sorter: ExprLike,
+        result: str,
+    ) -> None:
+        super().__init__(
+            tag="sort_trades",
+            attrs=normalize_attrs(
+                {
+                    "tradelist": tradelist,
+                    "sorter": sorter,
+                    "result": result,
+                }
+            ),
+        )
