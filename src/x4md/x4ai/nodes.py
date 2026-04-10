@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from x4md.expressions import ExprLike
 from x4md.md.common import normalize_attrs
-from x4md.md.types import ActionNode, ConditionNode, ParamNode
+from x4md.md.types import ActionNode, ConditionNode, CueChildNode, ParamNode
 
 from .types import AINode, InterruptNode, OrderChildNode
 
@@ -51,10 +51,15 @@ class Interrupts(OrderChildNode):
 class Handler(InterruptNode):
     def __init__(
         self,
-        *children: AINode | ConditionNode | ActionNode,
+        *children: AINode | ConditionNode | ActionNode | CueChildNode,
         ref: str | None = None,
         comment: str | None = None,
     ) -> None:
+        """Interrupt handler.
+
+        Note: Accepts CueChildNode to allow Conditions wrapper which extends
+        CueChildNode but is used in both MD cues and AI handlers.
+        """
         super().__init__(
             tag="handler",
             attrs=normalize_attrs({"ref": ref, "comment": comment}),
@@ -396,4 +401,106 @@ class ClampTradeAmount(OrderChildNode):
                 "tradeoffer": tradeoffer,
                 "amount": amount,
             }),
+        )
+
+
+class CreatePosition(OrderChildNode):
+    """Create position object for navigation.
+
+    Maps to X4 AI <create_position> element.
+
+    Args:
+        name: Variable to store position
+        object: Object to create position from
+        space: Space context
+        x, y, z: Coordinates
+        min, max: Random offset range
+
+    Example:
+        CreatePosition(name="$pos", object="$station", min="1km", max="5km")
+    """
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        object: ExprLike | None = None,
+        space: ExprLike | None = None,
+        x: ExprLike | None = None,
+        y: ExprLike | None = None,
+        z: ExprLike | None = None,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        super().__init__(
+            tag="create_position",
+            attrs=normalize_attrs({
+                "name": name,
+                "object": object,
+                "space": space,
+                "x": x,
+                "y": y,
+                "z": z,
+                "min": min,
+                "max": max,
+            }),
+        )
+
+
+class GetJumpPath(OrderChildNode):
+    """Calculate jump path between sectors.
+
+    Maps to X4 AI <get_jump_path> element.
+
+    Args:
+        result: Variable to store path
+        start: Start sector/object
+        end: End sector/object
+
+    Example:
+        GetJumpPath(result="$path", start="this.sector", end="$targetSector")
+    """
+
+    def __init__(self, *, result: str, start: ExprLike, end: ExprLike) -> None:
+        super().__init__(
+            tag="get_jump_path",
+            attrs=normalize_attrs({"result": result, "start": start, "end": end}),
+        )
+
+
+class SetCommand(OrderChildNode):
+    """Set command interface for object.
+
+    Maps to X4 AI <set_command> element.
+
+    Args:
+        command: Command to set
+
+    Example:
+        SetCommand(command="'Attack'")
+    """
+
+    def __init__(self, *, command: ExprLike) -> None:
+        super().__init__(
+            tag="set_command",
+            attrs=normalize_attrs({"command": command}),
+        )
+
+
+class SetCommandAction(OrderChildNode):
+    """Set command action.
+
+    Maps to X4 AI <set_command_action> element.
+
+    Args:
+        commandaction: Action to set
+
+    Example:
+        SetCommandAction(commandaction="'attacking'")
+    """
+
+    def __init__(self, *, commandaction: ExprLike) -> None:
+        super().__init__(
+            tag="set_command_action",
+            attrs=normalize_attrs({"commandaction": commandaction}),
         )

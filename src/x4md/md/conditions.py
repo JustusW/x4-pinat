@@ -5,10 +5,15 @@ from __future__ import annotations
 from x4md.expressions import ExprLike
 
 from .common import normalize_attrs
-from .types import ConditionNode
+from .types import ConditionNode, CueChildNode
 
 
-class Conditions(ConditionNode):
+class Conditions(CueChildNode):
+    """Conditions wrapper for cues.
+
+    Note: Extends CueChildNode because it appears as a direct child of <cue>.
+    Contains ConditionNode children.
+    """
     def __init__(self, *children: ConditionNode) -> None:
         super().__init__(tag="conditions", children=list(children))
 

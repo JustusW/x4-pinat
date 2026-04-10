@@ -106,3 +106,32 @@ class OnAbort(CueChildNode):
 
     def __init__(self, *children: ActionNode) -> None:
         super().__init__(tag="on_abort", children=list(children))
+
+
+class Delay(CueChildNode):
+    """Add delay before cue activation.
+
+    Maps to X4 MD <delay> cue child element.
+
+    Args:
+        exact: Exact delay duration
+        min: Minimum delay
+        max: Maximum delay
+
+    Example:
+        Delay(exact="5s")
+        Delay(min="1s", max="10s")
+    """
+
+    def __init__(
+        self,
+        *,
+        exact: ExprLike | None = None,
+        min: ExprLike | None = None,
+        max: ExprLike | None = None,
+    ) -> None:
+        from .common import normalize_attrs
+        super().__init__(
+            tag="delay",
+            attrs=normalize_attrs({"exact": exact, "min": min, "max": max}),
+        )

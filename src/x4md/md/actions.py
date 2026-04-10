@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, TypeAlias
 
+from x4md.core import XmlElement
 from x4md.expressions import ExprLike
 
 from .common import normalize_attrs
@@ -48,7 +49,13 @@ class Param(ParamNode):
 
 
 class Actions(ActionNode):
-    def __init__(self, *children: ActionNode) -> None:
+    def __init__(self, *children: XmlElement) -> None:
+        """Action sequence wrapper.
+
+        Note: In AI script handlers, this may contain AI order commands
+        (OrderChildNode) alongside MD actions, which is why we accept
+        XmlElement rather than just ActionNode.
+        """
         super().__init__(tag="actions", children=list(children))
 
 
@@ -86,7 +93,7 @@ class Return(ActionNode):
 
 
 class DoIf(ActionNode):
-    def __init__(self, value: ExprLike, *children: ActionNode, comment: str | None = None) -> None:
+    def __init__(self, value: ExprLike, *children: ConditionNode, comment: str | None = None) -> None:
         super().__init__(
             tag="do_if",
             attrs=normalize_attrs({"value": value, "comment": comment}),
@@ -112,7 +119,7 @@ class DoAll(ActionNode):
     def __init__(
         self,
         exact: ExprLike,
-        *children: ActionNode,
+        *children: ConditionNode,
         counter: str | None = None,
         reverse: bool | None = None,
     ) -> None:
@@ -265,7 +272,7 @@ class DoForEach(ActionNode):
     def __init__(
         self,
         name: str,
-        *children: ActionNode,
+        *children: ConditionNode,
         in_: ExprLike,
         counter: str | None = None,
         reverse: bool | None = None,
@@ -725,7 +732,7 @@ class FindBuyOffer(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         space: ExprLike | None = None,
         wares: ExprLike | None = None,
         tradepartner: ExprLike | None = None,
@@ -769,7 +776,7 @@ class FindSellOffer(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         space: ExprLike | None = None,
         wares: ExprLike | None = None,
         tradepartner: ExprLike | None = None,
@@ -813,7 +820,7 @@ class FindStation(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         name: str | None = None,
         space: ExprLike | None = None,
         multiple: bool | None = None,
@@ -850,7 +857,7 @@ class FindSector(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         name: str | None = None,
         space: ExprLike | None = None,
         multiple: bool | None = None,
@@ -879,7 +886,7 @@ class FindGate(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         name: str | None = None,
         space: ExprLike | None = None,
         multiple: bool | None = None,
@@ -909,7 +916,7 @@ class FindDockingbay(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         name: str | None = None,
         object: ExprLike | None = None,
         checkoperational: bool | None = None,
@@ -944,7 +951,7 @@ class FindShip(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         name: str | None = None,
         space: ExprLike | None = None,
         multiple: bool | None = None,
@@ -974,7 +981,7 @@ class FindObject(ActionNode):
 
     def __init__(
         self,
-        *children: ActionNode,
+        *children: ConditionNode,
         name: str | None = None,
         space: ExprLike | None = None,
         multiple: bool | None = None,
@@ -1092,132 +1099,3 @@ class AppendListElements(ActionNode):
             attrs=normalize_attrs({"name": name, "other": other}),
         )
 
-
-class CreatePosition(ActionNode):
-    """Create position object for navigation.
-
-    Maps to X4 AI <create_position> element.
-
-    Args:
-        name: Variable to store position
-        object: Object to create position from
-        space: Space context
-        x, y, z: Coordinates
-        min, max: Random offset range
-
-    Example:
-        CreatePosition(name="$pos", object="$station", min="1km", max="5km")
-    """
-
-    def __init__(
-        self,
-        *,
-        name: str,
-        object: ExprLike | None = None,
-        space: ExprLike | None = None,
-        x: ExprLike | None = None,
-        y: ExprLike | None = None,
-        z: ExprLike | None = None,
-        min: ExprLike | None = None,
-        max: ExprLike | None = None,
-    ) -> None:
-        super().__init__(
-            tag="create_position",
-            attrs=normalize_attrs({
-                "name": name,
-                "object": object,
-                "space": space,
-                "x": x,
-                "y": y,
-                "z": z,
-                "min": min,
-                "max": max,
-            }),
-        )
-
-
-class GetJumpPath(ActionNode):
-    """Calculate jump path between sectors.
-
-    Maps to X4 AI <get_jump_path> element.
-
-    Args:
-        result: Variable to store path
-        start: Start sector/object
-        end: End sector/object
-
-    Example:
-        GetJumpPath(result="$path", start="this.sector", end="$targetSector")
-    """
-
-    def __init__(self, *, result: str, start: ExprLike, end: ExprLike) -> None:
-        super().__init__(
-            tag="get_jump_path",
-            attrs=normalize_attrs({"result": result, "start": start, "end": end}),
-        )
-
-
-class SetCommand(ActionNode):
-    """Set command interface for object.
-
-    Maps to X4 AI <set_command> element.
-
-    Args:
-        command: Command to set
-
-    Example:
-        SetCommand(command="'Attack'")
-    """
-
-    def __init__(self, *, command: ExprLike) -> None:
-        super().__init__(
-            tag="set_command",
-            attrs=normalize_attrs({"command": command}),
-        )
-
-
-class SetCommandAction(ActionNode):
-    """Set command action.
-
-    Maps to X4 AI <set_command_action> element.
-
-    Args:
-        commandaction: Action to set
-
-    Example:
-        SetCommandAction(commandaction="'attacking'")
-    """
-
-    def __init__(self, *, commandaction: ExprLike) -> None:
-        super().__init__(
-            tag="set_command_action",
-            attrs=normalize_attrs({"commandaction": commandaction}),
-        )
-
-
-class Delay(ActionNode):
-    """Add delay before cue activation.
-
-    Maps to X4 MD <delay> cue child element.
-
-    Args:
-        exact: Exact delay duration
-        min: Minimum delay
-        max: Maximum delay
-
-    Example:
-        Delay(exact="5s")
-        Delay(min="1s", max="10s")
-    """
-
-    def __init__(
-        self,
-        *,
-        exact: ExprLike | None = None,
-        min: ExprLike | None = None,
-        max: ExprLike | None = None,
-    ) -> None:
-        super().__init__(
-            tag="delay",
-            attrs=normalize_attrs({"exact": exact, "min": min, "max": max}),
-        )

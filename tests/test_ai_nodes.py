@@ -27,7 +27,12 @@ class AIScriptTests(unittest.TestCase):
     """Tests for AI-script document structure."""
 
     def test_ai_script_renders_expected_structure(self) -> None:
-        """Complete AI script renders with proper structure."""
+        """Complete AI script renders with proper structure.
+
+        Note: This test uses Actions (MD) with CreateOrder/Resume (AI) which is
+        valid XML but creates a type mismatch. This is a known edge case where
+        handlers in AI scripts use MD Actions wrapper with AI order commands.
+        """
         script = AIScript(
             "order.trade.demo",
             Order(
