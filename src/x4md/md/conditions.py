@@ -44,3 +44,126 @@ class EventObjectSignalled(ConditionNode):
             tag="event_object_signalled",
             attrs=normalize_attrs({"object": object, "param": param}),
         )
+
+
+class CheckAll(ConditionNode):
+    """Conjunction of multiple conditions (all must be true).
+
+    Maps to X4 MD <check_all> element.
+
+    Args:
+        *children: Condition nodes that must all be true
+
+    Example:
+        CheckAll(
+            CheckValue("$ready"),
+            CheckValue("$count gt 0"),
+        )
+    """
+
+    def __init__(self, *children: ConditionNode) -> None:
+        super().__init__(tag="check_all", children=list(children))
+
+
+class EventObjectOrderReady(ConditionNode):
+    """Event triggered when an object's order becomes ready.
+
+    Maps to X4 MD <event_object_order_ready> element.
+
+    Args:
+        object: Object to monitor for order ready state
+        comment: Optional comment
+
+    Example:
+        EventObjectOrderReady(object="player.galaxy")
+    """
+
+    def __init__(self, *, object: ExprLike, comment: str | None = None) -> None:
+        super().__init__(
+            tag="event_object_order_ready",
+            attrs=normalize_attrs({"object": object, "comment": comment}),
+        )
+
+
+class EventObjectDestroyed(ConditionNode):
+    """Event triggered when an object is destroyed.
+
+    Maps to X4 MD <event_object_destroyed> element.
+
+    Args:
+        object: Object to monitor for destruction
+
+    Example:
+        EventObjectDestroyed(object="$targetShip")
+    """
+
+    def __init__(self, *, object: ExprLike) -> None:
+        super().__init__(
+            tag="event_object_destroyed",
+            attrs=normalize_attrs({"object": object}),
+        )
+
+
+class EventGameSaved(ConditionNode):
+    """Event triggered when the game is saved.
+
+    Maps to X4 MD <event_game_saved/> element.
+
+    Example:
+        EventGameSaved()
+    """
+
+    def __init__(self) -> None:
+        super().__init__(tag="event_game_saved")
+
+
+class EventPlayerAssignedHiredActor(ConditionNode):
+    """Event triggered when player assigns a hired crew member.
+
+    Maps to X4 MD <event_player_assigned_hired_actor/> element.
+
+    Example:
+        EventPlayerAssignedHiredActor()
+    """
+
+    def __init__(self) -> None:
+        super().__init__(tag="event_player_assigned_hired_actor")
+
+
+class EventObjectChangedZone(ConditionNode):
+    """Event triggered when an object changes zones.
+
+    Maps to X4 MD <event_object_changed_zone> element.
+
+    Args:
+        object: Object to monitor for zone changes
+
+    Example:
+        EventObjectChangedZone(object="$ship")
+    """
+
+    def __init__(self, *, object: ExprLike) -> None:
+        super().__init__(
+            tag="event_object_changed_zone",
+            attrs=normalize_attrs({"object": object}),
+        )
+
+
+class EventUITriggered(ConditionNode):
+    """Event triggered by UI interaction.
+
+    Maps to X4 MD <event_ui_triggered> element.
+
+    Args:
+        screen: Screen identifier
+        control: Control identifier
+
+    Example:
+        EventUITriggered(screen="MapMenu", control="confirm_button")
+    """
+
+    def __init__(self, *, screen: str, control: str) -> None:
+        super().__init__(
+            tag="event_ui_triggered",
+            attrs=normalize_attrs({"screen": screen, "control": control}),
+        )

@@ -1,0 +1,81 @@
+"""Tests for core XML and expression primitives."""
+
+import unittest
+
+from x4md import (
+    BoolExpr,
+    Dynamic,
+    Expr,
+    ListExpr,
+    MoneyExpr,
+    PathExpr,
+    TableEntry,
+    TableExpr,
+    TextExpr,
+    XmlElement,
+)
+from x4md.md.common import normalize_attrs
+
+
+class XmlElementTests(unittest.TestCase):
+    """Tests for XmlElement core functionality."""
+
+    def test_empty_element_renders_self_closing_tag(self) -> None:
+        """Empty element renders as self-closing tag."""
+        self.assertEqual(str(XmlElement("node")), "<node/>")
+
+    def test_xml_element_helpers_and_error_paths(self) -> None:
+        """XmlElement helper methods work correctly."""
+        child = XmlElement("child")
+        node = XmlElement("node")
+        self.assertIs(node.add(child), node)
+        self.assertIs(node.set(xmlns__xsi="uri", value_=1), node)
+        self.assertEqual(node.attrs["xmlns:xsi"], "uri")
+        self.assertEqual(node.attrs["value"], 1)
+
+        text_node = XmlElement("text", attrs={"enabled": True}, text="a & b")
+        self.assertEqual(str(text_node), '<text enabled="true">a &amp; b</text>')
+
+        combined = XmlElement("bad", children=[XmlElement("child")], text="x")
+        with self.assertRaises(ValueError):
+            combined.to_xml()
+
+        many = XmlElement.many("wrapper", [XmlElement("one"), XmlElement("two")])
+        self.assertEqual(
+            str(many),
+            "<wrapper>\n  <one/>\n  <two/>\n</wrapper>",
+        )
+
+
+class ExpressionTests(unittest.TestCase):
+    """Tests for typed expression classes."""
+
+    def test_expression_helpers_render_expected_strings(self) -> None:
+        """Expression helpers render correct X4 syntax."""
+        self.assertEqual(str(TextExpr.quote("hello")), "'hello'")
+        self.assertEqual(str(PathExpr.of("global", "$GT", Dynamic("ship"))), "global.$GT.{ship}")
+        self.assertEqual(str(ListExpr.of(1, True, TextExpr.quote("x"))), "[1, true, 'x']")
+        self.assertEqual(
+            str(TableExpr.of(TableEntry("Ship", PathExpr.of("this", "ship")), TableEntry("Ready", True))),
+            "table[$Ship = this.ship, $Ready = true]",
+        )
+        self.assertEqual(str(Expr.raw("player.age")), "player.age")
+        self.assertEqual(str(BoolExpr.of(True)), "true")
+        self.assertEqual(str(BoolExpr.of(False)), "false")
+        self.assertEqual(str(MoneyExpr.of(42)), "42Cr")
+
+
+class UtilityTests(unittest.TestCase):
+    """Tests for utility functions."""
+
+    def test_normalize_attrs_covers_object_passthrough(self) -> None:
+        """normalize_attrs handles different value types correctly."""
+        marker = object()
+        attrs = normalize_attrs({"x": marker, "flag": True, "none": None})
+        self.assertIs(attrs["x"], marker)
+        self.assertEqual(attrs["flag"], "true")
+        self.assertNotIn("none", attrs)
+
+
+if __name__ == "__main__":
+    unittest.main()

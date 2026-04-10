@@ -8,10 +8,17 @@ from x4md import (
     AIScript,
     AbortIf,
     Actions,
+    AppendToList,
     BoolExpr,
+    Break,
+    CancelAllOrders,
+    CancelCue,
+    CancelOrder,
+    CheckAll,
     CheckAny,
     CheckValue,
     Conditions,
+    Continue,
     CreateOrder,
     Cue,
     CueSignalledCue,
@@ -20,15 +27,23 @@ from x4md import (
     DoAll,
     DoElse,
     DoElseIf,
+    DoForEach,
     DoIf,
+    DoWhile,
     Dynamic,
     EnsureCounter,
     EnsureList,
     EnsurePath,
     EnsureTable,
     EventGameLoaded,
+    EventGameSaved,
+    EventObjectChangedZone,
+    EventObjectDestroyed,
+    EventObjectOrderReady,
     EventObjectSignalled,
+    EventPlayerAssignedHiredActor,
     EventPlayerCreated,
+    EventUITriggered,
     Expr,
     GameLoadedCue,
     Goto,
@@ -38,28 +53,36 @@ from x4md import (
     InputParam,
     Interrupts,
     Label,
-    MDScript,
     ListExpr,
+    MDCreateOrder,
+    MDScript,
     MoneyExpr,
     Order,
     Param,
-    PlayerCreatedCue,
     PathExpr,
+    PlayerCreatedCue,
+    RaiseLuaEvent,
+    RemoveFromList,
+    RemoveValue,
     RequestRegistryLibrary,
     Requires,
     Resume,
     Return,
     ReturnIf,
     RunActions,
-    SignalCue,
-    SignalCueInstantly,
+    SetObjectName,
     SetValue,
+    ShowNotification,
+    SignalCue,
+    SignalCueAction,
+    SignalCueInstantly,
     SignalObjects,
     SignalRouterCue,
     TableEntry,
     TableExpr,
     TextExpr,
     Wait,
+    WriteToLogbook,
     XmlElement,
 )
 from x4md.md.common import normalize_attrs
@@ -408,6 +431,266 @@ class RenderingTests(unittest.TestCase):
         self.assertIs(attrs["x"], marker)
         self.assertEqual(attrs["flag"], "true")
         self.assertNotIn("none", attrs)
+
+    def test_remove_value_renders_correctly(self) -> None:
+        """RemoveValue renders with name attribute."""
+        node = RemoveValue("$tempData")
+        self.assertEqual(str(node), '<remove_value name="$tempData"/>')
+
+    def test_append_to_list_renders_correctly(self) -> None:
+        """AppendToList renders with name and exact attributes."""
+        node = AppendToList("$errors", exact=TextExpr.quote("Error message"))
+        xml = str(node)
+        self.assertIn('<append_to_list', xml)
+        self.assertIn('name="$errors"', xml)
+        self.assertIn("exact=\"'Error message'\"", xml)
+
+    def test_append_to_list_with_expression(self) -> None:
+        """AppendToList accepts expression objects."""
+        node = AppendToList("$ships", exact=PathExpr.of("this", "ship"))
+        self.assertIn('exact="this.ship"', str(node))
+
+    def test_remove_from_list_renders_correctly(self) -> None:
+        """RemoveFromList renders with name and exact attributes."""
+        node = RemoveFromList("$queue", exact="$processedItem")
+        xml = str(node)
+        self.assertIn('<remove_from_list', xml)
+        self.assertIn('name="$queue"', xml)
+        self.assertIn('exact="$processedItem"', xml)
+
+    def test_do_while_renders_with_children(self) -> None:
+        """DoWhile renders nested action block with condition."""
+        node = DoWhile(
+            "$queue.count gt 0",
+            SetValue("$item", exact="$queue.{1}"),
+            RemoveFromList("$queue", exact="$item"),
+        )
+        xml = str(node)
+        self.assertIn('<do_while value="$queue.count gt 0">', xml)
+        self.assertIn('<set_value name="$item"', xml)
+        self.assertIn('<remove_from_list', xml)
+        self.assertIn('</do_while>', xml)
+
+    def test_do_for_each_renders_correctly(self) -> None:
+        """DoForEach renders with name, in, and optional parameters."""
+        node = DoForEach(
+            "$ship",
+            DebugText("Processing ship"),
+            in_="$ships",
+            counter="$i",
+            reverse=True,
+        )
+        xml = str(node)
+        self.assertIn('name="$ship"', xml)
+        self.assertIn('in="$ships"', xml)
+        self.assertIn('counter="$i"', xml)
+        self.assertIn('reverse="true"', xml)
+
+    def test_do_for_each_without_optional_params(self) -> None:
+        """DoForEach works without counter and reverse."""
+        node = DoForEach("$item", DebugText("test"), in_="$items")
+        xml = str(node)
+        self.assertNotIn('counter=', xml)
+        self.assertNotIn('reverse=', xml)
+
+    def test_break_renders_self_closing(self) -> None:
+        """Break renders as self-closing tag."""
+        self.assertEqual(str(Break()), '<break/>')
+
+    def test_continue_renders_self_closing(self) -> None:
+        """Continue renders as self-closing tag."""
+        self.assertEqual(str(Continue()), '<continue/>')
+
+    def test_signal_cue_action_renders_with_param(self) -> None:
+        """SignalCueAction renders with cue and optional param."""
+        node = SignalCueAction("ProcessTrade", param="$tradeData")
+        xml = str(node)
+        self.assertIn('cue="ProcessTrade"', xml)
+        self.assertIn('param="$tradeData"', xml)
+
+    def test_signal_cue_action_without_param(self) -> None:
+        """SignalCueAction works without param."""
+        node = SignalCueAction("Ready")
+        xml = str(node)
+        self.assertIn('cue="Ready"', xml)
+        self.assertNotIn('param=', xml)
+
+    def test_cancel_cue_renders_correctly(self) -> None:
+        """CancelCue renders with cue attribute."""
+        node = CancelCue("ProcessingLoop")
+        self.assertEqual(str(node), '<cancel_cue cue="ProcessingLoop"/>')
+
+    def test_create_order_renders_with_params(self) -> None:
+        """CreateOrder renders with object, id, params, and immediate."""
+        node = MDCreateOrder(
+            Param("home", value="$homeSector"),
+            Param("maxbuy", value=5),
+            object="$ship",
+            id=TextExpr.quote("GalaxyTraderMK3"),
+            immediate=True,
+        )
+        xml = str(node)
+        self.assertIn('<create_order', xml)
+        self.assertIn('object="$ship"', xml)
+        self.assertIn("id=\"'GalaxyTraderMK3'\"", xml)
+        self.assertIn('immediate="true"', xml)
+        self.assertIn('<param name="home"', xml)
+        self.assertIn('<param name="maxbuy"', xml)
+
+    def test_create_order_without_immediate(self) -> None:
+        """CreateOrder works without immediate flag."""
+        node = CreateOrder(object="$ship", id=TextExpr.quote("Trade"))
+        xml = str(node)
+        self.assertNotIn('immediate=', xml)
+
+    def test_cancel_order_renders_correctly(self) -> None:
+        """CancelOrder renders with object attribute."""
+        node = CancelOrder(object="$ship")
+        self.assertEqual(str(node), '<cancel_order object="$ship"/>')
+
+    def test_cancel_all_orders_renders_correctly(self) -> None:
+        """CancelAllOrders renders with object attribute."""
+        node = CancelAllOrders(object="$ship")
+        self.assertEqual(str(node), '<cancel_all_orders object="$ship"/>')
+
+    def test_write_to_logbook_renders_with_all_params(self) -> None:
+        """WriteToLogbook renders with all optional parameters."""
+        node = WriteToLogbook(
+            category="upkeep",
+            title=TextExpr.quote("Trade Complete"),
+            text=TextExpr.quote("Profit: 1000Cr"),
+            interaction="$ship",
+            money=MoneyExpr.of(1000),
+        )
+        xml = str(node)
+        self.assertIn('category="upkeep"', xml)
+        self.assertIn("title=\"'Trade Complete'\"", xml)
+        self.assertIn("text=\"'Profit: 1000Cr'\"", xml)
+        self.assertIn('interaction="$ship"', xml)
+        self.assertIn('money="1000Cr"', xml)
+
+    def test_write_to_logbook_with_minimal_params(self) -> None:
+        """WriteToLogbook works with only required params."""
+        node = WriteToLogbook(category="tips", title=TextExpr.quote("Tip"))
+        xml = str(node)
+        self.assertIn('category="tips"', xml)
+        self.assertNotIn('text=', xml)
+        self.assertNotIn('interaction=', xml)
+
+    def test_show_notification_renders_correctly(self) -> None:
+        """ShowNotification renders with text and optional params."""
+        node = ShowNotification(
+            text=TextExpr.quote("Trade completed"),
+            caption=TextExpr.quote("GalaxyTrader"),
+            sound="notification_generic",
+            timeout="5s",
+        )
+        xml = str(node)
+        self.assertIn("text=\"'Trade completed'\"", xml)
+        self.assertIn("caption=\"'GalaxyTrader'\"", xml)
+        self.assertIn('sound="notification_generic"', xml)
+        self.assertIn('timeout="5s"', xml)
+
+    def test_set_object_name_renders_correctly(self) -> None:
+        """SetObjectName renders with object and name."""
+        node = SetObjectName(object="$ship", name=TextExpr.quote("Trader-1"))
+        xml = str(node)
+        self.assertIn('object="$ship"', xml)
+        self.assertIn("name=\"'Trader-1'\"", xml)
+
+    def test_raise_lua_event_renders_with_param(self) -> None:
+        """RaiseLuaEvent renders with name and optional param."""
+        node = RaiseLuaEvent(name=TextExpr.quote("GT_TradeComplete"), param="$tradeData")
+        xml = str(node)
+        self.assertIn("name=\"'GT_TradeComplete'\"", xml)
+        self.assertIn('param="$tradeData"', xml)
+
+    def test_raise_lua_event_without_param(self) -> None:
+        """RaiseLuaEvent works without param."""
+        node = RaiseLuaEvent(name=TextExpr.quote("GT_Init"))
+        xml = str(node)
+        self.assertNotIn('param=', xml)
+
+    def test_check_all_renders_with_children(self) -> None:
+        """CheckAll renders conjunction of conditions."""
+        node = CheckAll(
+            CheckValue("$ready"),
+            CheckValue("$count gt 0"),
+        )
+        xml = str(node)
+        self.assertIn('<check_all>', xml)
+        self.assertIn('<check_value value="$ready"/>', xml)
+        self.assertIn('<check_value value="$count gt 0"/>', xml)
+        self.assertIn('</check_all>', xml)
+
+    def test_event_object_order_ready_renders_correctly(self) -> None:
+        """EventObjectOrderReady renders with object and optional comment."""
+        node = EventObjectOrderReady(object="player.galaxy", comment="Monitor orders")
+        xml = str(node)
+        self.assertIn('object="player.galaxy"', xml)
+        self.assertIn('comment="Monitor orders"', xml)
+
+    def test_event_object_order_ready_without_comment(self) -> None:
+        """EventObjectOrderReady works without comment."""
+        node = EventObjectOrderReady(object="$ship")
+        xml = str(node)
+        self.assertNotIn('comment=', xml)
+
+    def test_event_object_destroyed_renders_correctly(self) -> None:
+        """EventObjectDestroyed renders with object attribute."""
+        node = EventObjectDestroyed(object="$targetShip")
+        self.assertIn('object="$targetShip"', str(node))
+
+    def test_event_game_saved_renders_self_closing(self) -> None:
+        """EventGameSaved renders as self-closing tag."""
+        self.assertEqual(str(EventGameSaved()), '<event_game_saved/>')
+
+    def test_event_player_assigned_hired_actor_renders_self_closing(self) -> None:
+        """EventPlayerAssignedHiredActor renders as self-closing tag."""
+        self.assertEqual(str(EventPlayerAssignedHiredActor()), '<event_player_assigned_hired_actor/>')
+
+    def test_event_object_changed_zone_renders_correctly(self) -> None:
+        """EventObjectChangedZone renders with object attribute."""
+        node = EventObjectChangedZone(object="$ship")
+        self.assertIn('object="$ship"', str(node))
+
+    def test_event_ui_triggered_renders_correctly(self) -> None:
+        """EventUITriggered renders with screen and control."""
+        node = EventUITriggered(screen="MapMenu", control="confirm_button")
+        xml = str(node)
+        self.assertIn('screen="MapMenu"', xml)
+        self.assertIn('control="confirm_button"', xml)
+
+    def test_complex_workflow_with_new_nodes(self) -> None:
+        """Test complex workflow using multiple new nodes together."""
+        cue = Cue(
+            "ProcessQueue",
+            Conditions(EventGameSaved()),
+            Actions(
+                DoWhile(
+                    "global.$GT_Queue.count gt 0",
+                    SetValue("$item", exact="global.$GT_Queue.{1}"),
+                    RemoveFromList("global.$GT_Queue", exact="$item"),
+                    DoIf(
+                        "$item.$Valid",
+                        WriteToLogbook(
+                            category="upkeep",
+                            title=TextExpr.quote("Item processed"),
+                        ),
+                        Continue(),
+                    ),
+                    Break(),
+                ),
+            ),
+            instantiate=True,
+        )
+        xml = str(cue)
+        self.assertIn('<event_game_saved/>', xml)
+        self.assertIn('<do_while', xml)
+        self.assertIn('<remove_from_list', xml)
+        self.assertIn('<write_to_logbook', xml)
+        self.assertIn('<continue/>', xml)
+        self.assertIn('<break/>', xml)
 
 
 if __name__ == "__main__":

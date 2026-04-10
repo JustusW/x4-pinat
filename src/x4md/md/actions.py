@@ -309,8 +309,8 @@ class Continue(ActionNode):
         super().__init__(tag="continue")
 
 
-class SignalCue(ActionNode):
-    """Signal a cue with optional parameter.
+class SignalCueAction(ActionNode):
+    """Signal a cue with optional parameter (action node).
 
     Maps to X4 MD <signal_cue> element.
 
@@ -319,7 +319,7 @@ class SignalCue(ActionNode):
         param: Optional parameter to pass
 
     Example:
-        SignalCue("ProcessTrade", param="$tradeData")
+        SignalCueAction("ProcessTrade", param="$tradeData")
     """
 
     def __init__(self, cue: str, *, param: ExprLike | None = None) -> None:
