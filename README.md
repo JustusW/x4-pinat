@@ -1,6 +1,6 @@
 # X4-PINAT 🥬
 
-**X4-PINAT** (pronounced like the German word "Spinat" / English "spinach") - **P**ython **I**nterface for **N**avigating **A**ggressive **T**ranspilation
+**X4-PINAT** (pronounced like the German word "Spinat" / English "spinach") - **PINAT** **I**s **N**ot **A** **T**ranspiler.
 
 A comprehensive, type-safe Python library for generating X4: Foundations Mission Director (MD) XML and AI-script XML from idiomatic Python code.
 
