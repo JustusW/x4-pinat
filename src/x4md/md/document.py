@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from .common import normalize_attrs
-from .types import ActionNode, CueChildNode, MDNode, ParamNode
+from .types import CueChildNode, MDNode, ParamNode
+
+if TYPE_CHECKING:
+    from x4md._xsd_validation import XsdValidationIssue
 
 
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
@@ -96,10 +100,38 @@ class MDScript(MDNode):
             children=[cues or Cues()],
         )
 
-    def to_document(self) -> str:
-        """Render the full MD document including the XML declaration."""
+    def to_document(self, *, validate: bool = False) -> str:
+        """Render the full MD document including the XML declaration.
 
-        return '<?xml version="1.0" encoding="utf-8"?>\n' + self.to_xml()
+        Args:
+            validate: When ``True`` the rendered document is checked
+                against ``.x4-refs/md.xsd`` and an
+                :class:`x4md.XsdValidationError` is raised if any
+                violations remain after filtering known XSD gaps (see
+                :mod:`x4md._xsd_validation`). Defaults to ``False`` for
+                backwards compatibility; prefer ``True`` in CI and
+                extension build scripts.
+        """
+
+        document = '<?xml version="1.0" encoding="utf-8"?>\n' + self.to_xml()
+        if validate:
+            from x4md._xsd_validation import raise_if_invalid
+
+            raise_if_invalid(document)
+        return document
+
+    def validate(self) -> list["XsdValidationIssue"]:
+        """Return the list of XSD issues in the rendered document.
+
+        Never raises; an empty list means the document conforms to
+        ``md.xsd`` (modulo :data:`x4md._xsd_validation.KNOWN_XSD_GAPS`).
+        Use this when you want structured feedback instead of a hard
+        failure.
+        """
+
+        from x4md._xsd_validation import validate_document
+
+        return validate_document(self.to_document())
 
     def __str__(self) -> str:
         return self.to_document()
@@ -231,31 +263,6 @@ class InputParam(ParamNode):
             tag="input_param",
             attrs=normalize_attrs({"name": name, "value": value}),
         )
-
-
-class OnAbort(CueChildNode):
-    """Actions to execute when a cue is aborted.
-
-    Maps to X4 MD <on_abort> element. Used within cues to define cleanup
-    or error handling actions that run when the cue is cancelled.
-
-    Args:
-        *children: Action nodes to execute on abort
-
-    Example:
-        Cue(
-            "TradingCue",
-            Conditions(...),
-            Actions(...),
-            OnAbort(
-                DebugText("Trading cue was aborted"),
-                SetValue(name="$trading", exact=False)
-            )
-        )
-    """
-
-    def __init__(self, *children: ActionNode) -> None:
-        super().__init__(tag="on_abort", children=list(children))
 
 
 class Delay(CueChildNode):

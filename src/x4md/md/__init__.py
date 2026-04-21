@@ -76,7 +76,7 @@ from .conditions import (
     MatchRelationTo,
     MatchSeller,
 )
-from .document import Cue, Cues, Delay, InputParam, Library, MDScript, OnAbort
+from .document import Cue, Cues, Delay, InputParam, Library, MDScript
 from .recipes import (
     AbortIf,
     CueSignalledCue,
@@ -165,7 +165,6 @@ __all__ = [
     "MatchGateDistance",
     "MatchRelationTo",
     "MatchSeller",
-    "OnAbort",
     "Param",
     "ParamNode",
     "Params",

@@ -1,126 +1,105 @@
-# Known `x4md` Class-Design Defects Uncovered by Schema Tests
+# `x4md` XSD Defect Ledger
 
 The XSD-driven test layers (`tests/test_xsd_contract.py` and
-`tests/test_xsd_conformance.py`) surfaced several places where a Python
-class in `x4md` produces XML that the authoritative X4 XSDs
-(`.x4-refs/md.xsd`, `.x4-refs/aiscripts.xsd`) reject. The cheap fixes
-are already in `x4md` and its tests. The defects below are more invasive
-and are tracked here instead of silencing the relevant tests.
+`tests/test_xsd_conformance.py`) and the render-time validator
+(`src/x4md/_xsd_validation.py`) catch every place where a Python class
+in `x4md` produces XML the authoritative X4 XSDs
+(`.x4-refs/md.xsd`, `.x4-refs/aiscripts.xsd`) reject. This document is
+the running ledger.
 
-Entries are sorted by blast radius (most severe first). Each entry
-lists the XSD requirement, the Python class that violates it, how many
-XSD errors the defect contributes to `GalaxyProtector`'s output, and the
-intended fix.
+## Currently tracked gaps
 
-## 1. `GetJumpPath` uses attributes instead of child elements
+### Shipped-XSD gap: `<goto>` (permanent)
 
-**Python:** `x4md.x4ai.nodes.GetJumpPath` emits
-`<get_jump_path result="$v" start="a" end="b"/>`.
+- **Python:** `x4md.x4ai.nodes.Goto("label")` emits
+  `<goto label="label"/>`.
+- **XSD:** `aiscripts.xsd` has no `<goto>` element, yet vanilla X4 AI
+  scripts use it everywhere to loop back to `<label>` markers inside
+  the main `<actions>` block.
+- **Verdict:** Incomplete upstream XSD, not a library bug. The tag is
+  registered in `x4md._xsd_validation.KNOWN_XSD_GAPS`, so
+  `validate_document` / `to_document(validate=True)` accept `<goto>`.
+  `validate_document_raw` still reports it so a future Egosoft schema
+  release that fixes the gap flips a regression test in
+  `tests/test_render_time_validation.py` and prompts removal from the
+  allow-list.
 
-**XSD (`aiscripts.xsd`):** `<get_jump_path>` requires a `component`
-attribute and takes `<start>` / `<end>` as *child elements*, not
-attributes. `result` is not a declared attribute at all - the result
-is returned into a variable via a different mechanism (typically a
-`component`-typed variable binding).
+Nothing else is currently deferred. All four previously-tracked class-
+design defects have been fixed; see the history section below for a
+record of the changes that went in.
 
-**Impact:** Contributes 5 schema errors to the
-`galactic_trade_protector` QRF AI script today. The mod runs anyway
-because X4's runtime appears permissive here, but any strict XSD
-validator will reject the output.
+## Fixed defects (history)
 
-**Fix:** Rewrite `GetJumpPath` to accept `component=` (required),
-`refobject=`, `multiple=`, etc. as attributes, and `start=` / `end=`
-as child-element expressions. Update `GalaxyProtector/builders/orders.py`
-accordingly; consult a vanilla X4 AI script that uses `<get_jump_path>`
-for the idiomatic shape.
+### 1. `GetJumpPath` attributes vs. child elements — FIXED
 
-## 2. `Goto` emits an element that `aiscripts.xsd` does not declare
+Previous behaviour emitted
+`<get_jump_path result="$v" start="a" end="b"/>`, which violated
+`common.xsd` on five counts (missing required `component`, three
+`result`/`start`/`end` attributes that the schema does not allow, and a
+missing `<start>` child).
 
-**Python:** `x4md.x4ai.nodes.Goto("label")` emits
-`<goto label="label"/>`.
+The class now takes the XSD shape: a required `component=` attribute
+(with a `DeprecationWarning`-flagged `result=` alias for pre-migration
+callers), and either raw expression `start=`/`end=` values (auto-wrapped
+into `<start object="..."/>` / `<end object="..."/>` children) or
+explicit :class:`Start` / :class:`End` nodes for finer-grained control.
 
-**XSD:** `aiscripts.xsd` has no `<goto>` element. `<resume label="..."/>`
-exists, but semantically it is "resume at label after an interrupt",
-not "unconditionally jump to label inside the main actions block".
+Added classes: `x4md.x4ai.Start`, `x4md.x4ai.End`. All three
+participate in the XSD contract registry.
 
-**Impact:** Contributes 1 schema error to the QRF AI script.
+### 2. `Goto` — RECLASSIFIED AS PERMANENT XSD GAP
 
-**Reality check:** Vanilla X4 AI scripts *do* use `<goto>`. This is a
-case where the shipped XSD is incomplete rather than the library being
-wrong. The correct fix is probably to:
+No code change: `Goto` keeps emitting `<goto label="..."/>` because
+vanilla X4 does. The entry is tracked in `KNOWN_XSD_GAPS` (see above).
 
-  1. Keep `Goto` as-is.
-  2. Add a targeted xfail in `test_xsd_conformance.py` when validating
-     scripts that use `<goto>`, with a docstring explaining the XSD gap.
-  3. Track the gap so we re-validate against future Egosoft XSD
-     releases.
+### 3. `OnAbort` misfiled under MD — FIXED
 
-## 3. `OnAbort` is declared as an MD cue child but `md.xsd` has no `<on_abort>`
+Moved from `x4md.md.document.OnAbort` (`CueChildNode`, no corresponding
+element in `md.xsd`) to `x4md.x4ai.nodes.OnAbort` (`OrderChildNode`).
+The AI document writer already hoists `<on_abort>` to the correct
+sibling position under `<aiscript>` via
+`AIScript._rewrite_children`, so passing `OnAbort(...)` inside an
+`Order(...)` now produces schema-valid output.
 
-**Python:** `x4md.md.document.OnAbort` extends `CueChildNode`, so it is
-valid to drop inside an MD `<cue>`.
+Breaking change: `from x4md import OnAbort` still works, but
+`from x4md.md import OnAbort` does not. `x4md.md.OnAbort` callers that
+intended an MD cue cleanup should rewrite their cue logic via a
+secondary cue (`SignalCueInstantly` into a cleanup cue) since there is
+no MD equivalent to `<on_abort>`.
 
-**XSD (`md.xsd`):** No `<on_abort>` element exists anywhere in
-`md.xsd`. The tag is only declared in `aiscripts.xsd` as a top-level
-sibling of `<aiscript>`'s main `<actions>`.
+### 4. `Delay` base class — NOT AN ACTUAL DEFECT
 
-**Impact:** Any MD script that uses `OnAbort` will be rejected by
-`md.xsd`. GP does not use it today, but `tests/test_md_document.py`
-does (as a builder-level test, not a schema-level one).
+The earlier entry was stale. `md.xsd` *does* declare `<delay>` as a
+direct `<cue>` child, and `x4md.md.document.Delay` has always been a
+`CueChildNode`, not an `ActionNode`. The class is correct as-is; the
+entry has been removed.
 
-**Fix:** Move `OnAbort` to `x4md.x4ai.nodes`, re-base it on
-`OrderChildNode`, and remove the MD-side import. Alternatively, delete
-the class entirely if no user ever emitted it into an MD document.
+### 5. `Handler` loose actions — FIXED (in an earlier pass)
 
-## 4. `Delay` is filed as `ActionNode` but is only valid as a direct `<cue>` child
+`Handler._rewrite_children` wraps loose action nodes into a single
+`<actions>` child, matching the `interrupts`-context handler content
+model in `aiscripts.xsd`.
 
-**Python:** `x4md.md.actions.Delay` extends `ActionNode` and renders
-`<delay exact="..."/>` anywhere an action is legal.
+## Render-time validation
 
-**XSD (`md.xsd`):** The `<delay>` element only appears inside `<cue>`
-directly (the XSD model is `<cue><delay .../><conditions/>...`).
-Inserting `<delay>` inside `<actions>` produces
-*Unexpected child with tag 'delay'*.
+`MDScript.to_document(validate=True)` and
+`AIScript.to_document(validate=True)` now run the rendered document
+through the right XSD and raise `x4md.XsdValidationError` if anything
+outside `KNOWN_XSD_GAPS` remains. `MDScript.validate()` /
+`AIScript.validate()` return a list of `XsdValidationIssue`s for
+callers that prefer structured reporting over exceptions. See
+`x4md/_xsd_validation.py` for the implementation and
+`tests/test_render_time_validation.py` for the contract.
 
-**Impact:** None in `GalaxyProtector` today; would break any future
-caller who tried to use it inside an action block.
-
-**Fix:** Either rename `Delay` to `CueDelay` and re-base it as
-`CueChildNode`, or replace action-scope usage with
-`Wait(exact="...")` (the AI-script equivalent). MD scripts that want
-a delayed action typically split the action into a second cue chained
-via `signal_cue_instantly`.
-
-## 5. `Handler` previously accepted loose actions
-
-**Status: FIXED.** `Handler._rewrite_children` now hoists loose
-actions into a single `<actions>` child, matching the
-``interrupts`` context of `<handler>` in `aiscripts.xsd`.
-
-## Remaining schema errors in `GalaxyProtector` after current fixes
-
-After the cheap fixes in this pass, validating the installed
-`galactic_trade_protector` extension against the XSDs yields:
-
-```
-galactic_trade_protector_dispatch.xml: 0 errors
-order.galactictradeprotector.quickreactionforce.xml: 6 errors
-   - missing required attribute 'component'
-   - 'result' attribute not allowed for element
-   - 'start' attribute not allowed for element
-   - 'end' attribute not allowed for element
-   - The content of element 'get_jump_path' is not complete. Tag 'start' expected.
-   - Unexpected child with tag 'goto' at position 15.
-```
-
-The first five are from defect #1 above (`GetJumpPath`). The last is
-defect #2 (`Goto`).
+The default `validate` flag is ``False`` so existing callers do not
+break in-place; extension build scripts should flip it on (and treat a
+raised `XsdValidationError` as a build failure).
 
 ## How to rerun the schema checks
 
 ```bash
 cd PythonToMDTranspiler
-./.venv/Scripts/python.exe -m pytest tests/test_xsd_contract.py tests/test_xsd_conformance.py
+./.venv/Scripts/python.exe -m pytest tests/test_xsd_contract.py tests/test_xsd_conformance.py tests/test_render_time_validation.py
 ```
 
 To validate a freshly-built `GalaxyProtector` install:
@@ -129,15 +108,15 @@ To validate a freshly-built `GalaxyProtector` install:
 cd GalaxyProtector
 ../PythonToMDTranspiler/.venv/Scripts/python.exe build.py
 ../PythonToMDTranspiler/.venv/Scripts/python.exe -c "
-import sys, os, glob
-sys.path.insert(0, r'../PythonToMDTranspiler/src')
-sys.path.insert(0, r'../PythonToMDTranspiler/tests')
-from xsd_support import md_schema, ai_schema
-base = r'E:\\SteamLibrary\\steamapps\\common\\X4 Foundations\\extensions\\galactic_trade_protector'
-for schema, folder in [(md_schema(), 'md'), (ai_schema(), 'aiscripts')]:
-    for f in glob.glob(os.path.join(base, folder, '*.xml')):
-        errs = list(schema.iter_errors(open(f, encoding='utf-8').read()))
-        print(os.path.basename(f), len(errs), 'errors')
-        for e in errs[:10]: print('  -', e.reason)
+from pathlib import Path
+from x4md import validate_document
+
+install = Path(r'E:\\SteamLibrary\\steamapps\\common\\X4 Foundations\\extensions\\galactic_trade_protector')
+for folder in ('md', 'aiscripts'):
+    for f in sorted((install / folder).glob('*.xml')):
+        issues = validate_document(f.read_text(encoding='utf-8'))
+        print(f'{f.name}: {len(issues)} issue(s)')
+        for issue in issues[:10]:
+            print(f'  - {issue}')
 "
 ```

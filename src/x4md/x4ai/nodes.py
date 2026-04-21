@@ -309,10 +309,64 @@ class Goto(OrderChildNode):
 
     Args:
         label: Label name to jump to
+
+    Note:
+        The shipped ``.x4-refs/aiscripts.xsd`` does *not* declare a
+        ``<goto>`` element, yet every vanilla X4 AI script uses it to
+        loop back to labels inside the main ``<actions>`` block. This
+        is an XSD-shipping gap, not a library bug: the runtime happily
+        executes ``<goto>``. The render-time XSD validator tolerates
+        this element via an explicit known-gap allowlist (see
+        :mod:`x4md._xsd_validation`).
     """
 
     def __init__(self, label: str) -> None:
         super().__init__(tag="goto", attrs=normalize_attrs({"label": label}))
+
+
+class OnAbort(OrderChildNode):
+    """Cleanup actions that run if the AI order is aborted.
+
+    Maps to the ``<on_abort>`` element declared by ``aiscripts.xsd`` as
+    a top-level ``<aiscript>`` child, at the same level as ``<order>``
+    and ``<interrupts>``. In Python it is exposed as an
+    ``OrderChildNode`` for ergonomic nesting: pass it inside
+    :class:`Order`, and :class:`AIScript._rewrite_children` hoists it
+    to the correct sibling position.
+
+    This node previously lived in :mod:`x4md.md.document`; that location
+    was wrong because ``md.xsd`` declares no ``<on_abort>`` element. Any
+    MD script that embedded it would have been rejected by a strict
+    validator. See ``KNOWN_DEFECTS.md`` for the migration history.
+
+    Args:
+        *children: Action nodes that execute during cleanup. Loose
+            actions are emitted directly as ``<on_abort>`` children,
+            matching ``xs:group ref="actions"`` in the schema.
+        killed: When true, the actions only run if the script aborted
+            because the entity was killed (per XSD ``killed`` attribute).
+        comment: Optional comment for generated XML.
+
+    Example:
+        Order(
+            "cleanup.example",
+            SetOrderSyncpointReached(),
+            OnAbort(DebugText("cleaning up"), SetValue(name="$busy", exact=False)),
+            infinite=True,
+        )
+    """
+
+    def __init__(
+        self,
+        *children: object,
+        killed: bool | None = None,
+        comment: str | None = None,
+    ) -> None:
+        super().__init__(
+            tag="on_abort",
+            attrs=normalize_attrs({"killed": killed, "comment": comment}),
+            children=list(children),
+        )
 
 
 class AddWareReservation(OrderChildNode):
@@ -802,24 +856,169 @@ class CreatePosition(OrderChildNode):
         )
 
 
-class GetJumpPath(OrderChildNode):
-    """Calculate jump path between sectors.
+class Start(OrderChildNode):
+    """Anchor for the jump-path start sector.
 
-    Maps to X4 AI <get_jump_path> element.
+    Maps to the ``<start>`` child that ``<get_jump_path>`` requires
+    (see ``common.xsd`` ``componentoffset``). The schema marks the
+    ``object`` attribute as required; everything else is informational.
 
     Args:
-        result: Variable to store path
-        start: Start sector/object
-        end: End sector/object
-
-    Example:
-        GetJumpPath(result="$path", start="this.sector", end="$targetSector")
+        object: Reference to the starting sector/component.
+        comment: Optional comment for generated XML.
     """
 
-    def __init__(self, *, result: str, start: ExprLike, end: ExprLike) -> None:
+    def __init__(self, *, object: ExprLike, comment: str | None = None) -> None:
+        super().__init__(
+            tag="start",
+            attrs=normalize_attrs({"object": object, "comment": comment}),
+        )
+
+
+class End(OrderChildNode):
+    """Anchor for the jump-path end sector.
+
+    Maps to the ``<end>`` child that ``<get_jump_path>`` requires. The
+    schema treats all attributes as optional, but in practice callers
+    supply at least ``object`` (pointing at the target sector). Position
+    expressions (``x=``/``y=``/``z=`` etc.) are accepted for the
+    rarer "jump to coordinate" case.
+
+    Args:
+        object: Reference to the target sector/component.
+        x, y, z: Absolute coordinates.
+        space: Space context.
+        comment: Optional comment for generated XML.
+    """
+
+    def __init__(
+        self,
+        *,
+        object: ExprLike | None = None,
+        x: ExprLike | None = None,
+        y: ExprLike | None = None,
+        z: ExprLike | None = None,
+        space: ExprLike | None = None,
+        comment: str | None = None,
+    ) -> None:
+        super().__init__(
+            tag="end",
+            attrs=normalize_attrs(
+                {
+                    "object": object,
+                    "x": x,
+                    "y": y,
+                    "z": z,
+                    "space": space,
+                    "comment": comment,
+                }
+            ),
+        )
+
+
+class GetJumpPath(OrderChildNode):
+    """Compute a jump path between two sectors and store it in a variable.
+
+    Maps to the X4 AI ``<get_jump_path>`` element. The schema
+    (``common.xsd``) expects:
+
+    - A required ``component`` **attribute** that names the lvalue
+      receiving the path (list of components if ``multiple=true``,
+      otherwise the first hop).
+    - ``<start>`` and ``<end>`` **child elements** (not attributes)
+      pointing at the source and destination sectors.
+
+    For ergonomic callers, ``start=`` and ``end=`` also accept bare
+    ``ExprLike`` values; those are auto-wrapped into
+    ``<start object="..."/>`` / ``<end object="..."/>`` children. Pass
+    explicit :class:`Start` / :class:`End` instances when you need to
+    set additional attributes (coordinates, comments, etc.).
+
+    Args:
+        component: Variable to receive the result (first hop or full
+            path list depending on ``multiple``).
+        start: ``<start>`` anchor. Either a raw sector expression
+            (shortcut for ``Start(object=start)``) or an explicit
+            :class:`Start`.
+        end: ``<end>`` anchor. Either a raw sector expression
+            (shortcut for ``End(object=end)``) or an explicit :class:`End`.
+        offset: Optional lvalue for the corresponding position list.
+        refobject: Reference object whose known map knowledge is used.
+        multiple: When true, returns the full path; otherwise only the
+            first hop.
+        useblacklist: Whether to apply the travel blacklist.
+        useknownpath: Whether to restrict to known sectors.
+        uselocalhighways: Whether local highways may be used.
+        chance: Path-finding chance parameter.
+        weight: Path-finding weight parameter.
+        comment: Optional comment for generated XML.
+
+    Raises:
+        TypeError: If ``component`` is omitted (kept keyword-only and
+            required by the XSD).
+
+    Example:
+        GetJumpPath(
+            component="$path",
+            start=PathExpr.of("this", "ship", "sector"),
+            end="$target_sector",
+        )
+    """
+
+    def __init__(
+        self,
+        *,
+        component: ExprLike | None = None,
+        start: "ExprLike | Start",
+        end: "ExprLike | End",
+        result: ExprLike | None = None,
+        offset: ExprLike | None = None,
+        refobject: ExprLike | None = None,
+        multiple: bool | None = None,
+        useblacklist: ExprLike | None = None,
+        useknownpath: ExprLike | None = None,
+        uselocalhighways: ExprLike | None = None,
+        chance: ExprLike | None = None,
+        weight: ExprLike | None = None,
+        comment: str | None = None,
+    ) -> None:
+        if component is None and result is not None:
+            warnings.warn(
+                "GetJumpPath(result=...) is deprecated: aiscripts.xsd "
+                "names this attribute 'component'. Pass component=... "
+                "instead; 'result' is only accepted for backwards "
+                "compatibility with pre-XSD-contract call sites.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            component = result
+        if component is None:
+            raise TypeError(
+                "GetJumpPath requires 'component=' (the lvalue that "
+                "receives the computed path). aiscripts.xsd declares "
+                "this attribute as required."
+            )
+
+        start_node = start if isinstance(start, Start) else Start(object=start)
+        end_node = end if isinstance(end, End) else End(object=end)
+
         super().__init__(
             tag="get_jump_path",
-            attrs=normalize_attrs({"result": result, "start": start, "end": end}),
+            attrs=normalize_attrs(
+                {
+                    "component": component,
+                    "offset": offset,
+                    "refobject": refobject,
+                    "multiple": multiple,
+                    "useblacklist": useblacklist,
+                    "useknownpath": useknownpath,
+                    "uselocalhighways": uselocalhighways,
+                    "chance": chance,
+                    "weight": weight,
+                    "comment": comment,
+                }
+            ),
+            children=[start_node, end_node],
         )
 
 

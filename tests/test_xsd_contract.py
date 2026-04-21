@@ -50,11 +50,13 @@ from x4md import (
     DoForEach,
     DoIf,
     DoWhile,
+    End,
     EventCueSignalled,
     EventGameLoaded,
     EventObjectAttacked,
     EventObjectSignalled,
     EventPlayerCreated,
+    GetJumpPath,
     Handler,
     InputParam,
     Interrupts,
@@ -79,6 +81,7 @@ from x4md import (
     SignalCueInstantly,
     SignalObjects,
     SortList,
+    Start,
     TextExpr,
     Wait,
     WriteToLogbook,
@@ -149,10 +152,6 @@ def _input_param() -> XmlElement:
 
 def _actions() -> XmlElement:
     return _Actions()
-
-
-def _on_abort() -> XmlElement:
-    return OnAbort()
 
 
 def _conditions() -> XmlElement:
@@ -340,6 +339,26 @@ def _create_position() -> XmlElement:
     return CreatePosition(name=_LVAL, x=_EXPR, y=_EXPR, z=_EXPR)
 
 
+def _get_jump_path() -> XmlElement:
+    return GetJumpPath(
+        component=_LVAL,
+        start=PathExpr.of("this", "sector"),
+        end=PathExpr.of("$target_sector"),
+    )
+
+
+def _start() -> XmlElement:
+    return Start(object=PathExpr.of("this", "sector"))
+
+
+def _end() -> XmlElement:
+    return End(object=PathExpr.of("$target_sector"))
+
+
+def _on_abort() -> XmlElement:
+    return OnAbort()
+
+
 # Registry --------------------------------------------------------------------
 
 
@@ -349,12 +368,6 @@ SPECS: list[ContractSpec] = [
     ContractSpec(Library, "library", "md", _library),
     ContractSpec(Cues, "cues", "md", lambda: Cues()),
     ContractSpec(_Actions, "actions", "md", _actions),
-    # NOTE: ``OnAbort`` is currently declared as a ``CueChildNode`` but
-    # md.xsd does not define an ``<on_abort>`` element at all - the tag
-    # only exists in aiscripts.xsd under ``<aiscript>``. That is a
-    # separate class-design defect (Python allows emitting structurally
-    # invalid MD); tracking it in an x4md FIXME rather than the
-    # contract registry.
     ContractSpec(Conditions, "conditions", "md", _conditions),
     ContractSpec(Params, "params", "md", _params),
     # ``<param>`` is declared in many places in md.xsd with different
@@ -414,6 +427,10 @@ SPECS: list[ContractSpec] = [
     ContractSpec(SetOrderFailed, "set_order_failed", "ai", _set_order_failed),
     ContractSpec(ClearOrderFailure, "clear_order_failure", "ai", _clear_order_failure),
     ContractSpec(CreatePosition, "create_position", "ai", _create_position),
+    ContractSpec(GetJumpPath, "get_jump_path", "ai", _get_jump_path),
+    ContractSpec(Start, "start", "ai", _start),
+    ContractSpec(End, "end", "ai", _end),
+    ContractSpec(OnAbort, "on_abort", "ai", _on_abort),
 ]
 
 

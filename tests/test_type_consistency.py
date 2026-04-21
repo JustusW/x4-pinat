@@ -184,16 +184,23 @@ class TypeConsistencyTests(unittest.TestCase):
             and obj.__module__ == 'x4md.md.document'
         ]
 
-        # Should find at least OnAbort and Delay
-        self.assertGreaterEqual(
-            len(concrete_cue_children), 2,
-            "Should find at least OnAbort and Delay as concrete CueChildNode in document module"
-        )
-
-        # Verify OnAbort and Delay are present
+        # After the OnAbort migration, Delay is the only non-container
+        # ``CueChildNode`` concrete class in ``document.py`` (``Cue``
+        # and ``Library`` are containers rather than leaves). We keep
+        # the assertion at >= 1 so the test fails loudly if Delay ever
+        # disappears, while not rejecting future additions.
         class_names = {cls.__name__ for cls in concrete_cue_children}
-        self.assertIn('OnAbort', class_names)
-        self.assertIn('Delay', class_names)
+        self.assertIn(
+            'Delay', class_names,
+            "Delay should remain in x4md.md.document as the cue-level "
+            "<delay> is declared in md.xsd.",
+        )
+        self.assertNotIn(
+            'OnAbort', class_names,
+            "OnAbort was moved to x4md.x4ai.nodes: md.xsd has no "
+            "<on_abort> element, so keeping it in x4md.md would "
+            "silently produce schema-invalid MD scripts.",
+        )
 
     def test_order_child_nodes_are_in_ai_package(self) -> None:
         """Nodes inheriting from OrderChildNode should be in x4ai package."""

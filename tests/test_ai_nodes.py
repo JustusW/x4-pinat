@@ -322,9 +322,24 @@ class AINodeTests(unittest.TestCase):
             str(CreatePosition(name="$pos", object="$station", min="1km", max="5km")),
             '<create_position name="$pos" object="$station" min="1km" max="5km"/>',
         )
+        # ``aiscripts.xsd`` names the result attribute ``component`` and
+        # models ``start``/``end`` as child elements with an ``object``
+        # attribute, so the Pythonic ergonomic form ``start=...``/``end=...``
+        # auto-wraps into ``<start object="..."/>`` / ``<end object="..."/>``.
         self.assertEqual(
-            str(GetJumpPath(result="$path", start="this.sector", end="$targetSector")),
-            '<get_jump_path result="$path" start="this.sector" end="$targetSector"/>',
+            str(
+                GetJumpPath(
+                    component="$path",
+                    start="this.sector",
+                    end="$targetSector",
+                )
+            ),
+            (
+                '<get_jump_path component="$path">\n'
+                '  <start object="this.sector"/>\n'
+                '  <end object="$targetSector"/>\n'
+                "</get_jump_path>"
+            ),
         )
 
     def test_run_script_renders_with_params(self) -> None:

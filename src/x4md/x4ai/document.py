@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from x4md.md.actions import Actions
 from x4md.md.types import ActionNode
+
+if TYPE_CHECKING:
+    from x4md._xsd_validation import XsdValidationIssue
 
 from .types import AINode, OrderChildNode
 
@@ -133,8 +138,39 @@ class AIScript(AINode):
                 rewritten.append(on_abort_node)
         return rewritten
 
-    def to_document(self) -> str:
-        return '<?xml version="1.0" encoding="utf-8"?>\n' + self.to_xml()
+    def to_document(self, *, validate: bool = False) -> str:
+        """Render the full AI document including the XML declaration.
+
+        Args:
+            validate: When ``True`` the rendered document is checked
+                against ``.x4-refs/aiscripts.xsd`` and an
+                :class:`x4md.XsdValidationError` is raised if any
+                violations remain after filtering known XSD gaps (e.g.
+                the undeclared ``<goto>`` element - see
+                :mod:`x4md._xsd_validation`). Defaults to ``False`` for
+                backwards compatibility; prefer ``True`` in CI and
+                extension build scripts.
+        """
+
+        document = '<?xml version="1.0" encoding="utf-8"?>\n' + self.to_xml()
+        if validate:
+            from x4md._xsd_validation import raise_if_invalid
+
+            raise_if_invalid(document)
+        return document
+
+    def validate(self) -> list["XsdValidationIssue"]:
+        """Return the list of XSD issues in the rendered document.
+
+        Never raises; an empty list means the document conforms to
+        ``aiscripts.xsd`` (modulo
+        :data:`x4md._xsd_validation.KNOWN_XSD_GAPS`). Use this when you
+        want structured feedback instead of a hard failure.
+        """
+
+        from x4md._xsd_validation import validate_document
+
+        return validate_document(self.to_document())
 
     def __str__(self) -> str:
         return self.to_document()

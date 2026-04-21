@@ -1,5 +1,13 @@
 """Helpers for building X4 Mission Director and AI XML from Python."""
 
+from ._xsd_validation import (
+    KNOWN_XSD_GAPS,
+    XsdValidationError,
+    XsdValidationIssue,
+    raise_if_invalid,
+    validate_document,
+    validate_document_raw,
+)
 from .core import XmlElement
 from .expressions import (
     FALSE,
@@ -96,7 +104,6 @@ from .md import (
     MatchGateDistance,
     MatchRelationTo,
     MatchSeller,
-    OnAbort,
     Param,
     ParamNode,
     Params,
@@ -139,6 +146,7 @@ from .x4ai import (
     CreateOrder,
     CreatePosition,
     CreateTradeOrder,
+    End,
     GetJumpPath,
     Goto,
     Handler,
@@ -147,6 +155,7 @@ from .x4ai import (
     Interrupts,
     Label,
     MoveTo,
+    OnAbort,
     Order,
     OrderChildNode,
     RemoveWareReservation,
@@ -158,6 +167,7 @@ from .x4ai import (
     SetOrderFailed,
     SetOrderState,
     SetOrderSyncpointReached,
+    Start,
     Wait,
     X4OrderCategoryWarning,
 )
@@ -206,6 +216,7 @@ __all__ = [
     "DoWhile",
     "Dynamic",
     "EditOrderParam",
+    "End",
     "EnsureCounter",
     "EnsureList",
     "EnsurePath",
@@ -299,6 +310,7 @@ __all__ = [
     "SignalRouterCue",
     "SortList",
     "SortTrades",
+    "Start",
     "SubstituteText",
     "TRUE",
     "TableEntry",
@@ -315,5 +327,11 @@ __all__ = [
     "TranslationPage",
     "Wait",
     "WriteToLogbook",
+    "KNOWN_XSD_GAPS",
+    "XsdValidationError",
+    "XsdValidationIssue",
+    "raise_if_invalid",
+    "validate_document",
+    "validate_document_raw",
     "XmlElement",
 ]
