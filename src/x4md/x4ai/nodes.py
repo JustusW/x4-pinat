@@ -147,10 +147,24 @@ class Interrupts(OrderChildNode):
 class Handler(InterruptNode):
     """Interrupt handler for AI orders.
 
+    Maps to the X4 AI ``<handler>`` element used inside
+    ``<interrupts>``. The schema's ``interrupts``-context ``<handler>``
+    only permits two children: ``<conditions>`` and ``<actions>``.
+
+    For convenience, callers can pass loose action nodes directly -
+    this class hoists them into a single ``<actions>`` child, the same
+    rewrite ``AIScript`` applies to loose order children. Passing an
+    explicit ``Actions(...)`` child is always accepted unchanged; a
+    ``Conditions(...)`` child is always passed through.
+
     Args:
-        *children: Conditions and actions used by the handler
-        ref: Optional handler reference
-        comment: Optional comment for generated XML
+        *children: A mix of ``Conditions``, ``Actions``, and/or loose
+            action nodes. Loose actions are wrapped into a single
+            ``<actions>`` child to match aiscripts.xsd.
+        ref: Optional handler reference.
+        comment: Optional comment for generated XML.
+        consume: If set, X4 marks the event consumed after the handler
+            fires (XSD ``boolean``). Defaults to schema default.
     """
 
     def __init__(
@@ -158,17 +172,64 @@ class Handler(InterruptNode):
         *children: AINode | ConditionNode | ActionNode | CueChildNode,
         ref: str | None = None,
         comment: str | None = None,
+        consume: bool | None = None,
     ) -> None:
-        """Interrupt handler.
-
-        Note: Accepts CueChildNode to allow Conditions wrapper which extends
-        CueChildNode but is used in both MD cues and AI handlers.
-        """
+        rewritten = Handler._rewrite_children(children)
         super().__init__(
             tag="handler",
-            attrs=normalize_attrs({"ref": ref, "comment": comment}),
-            children=list(children),
+            attrs=normalize_attrs(
+                {"ref": ref, "comment": comment, "consume": consume}
+            ),
+            children=rewritten,
         )
+
+    @staticmethod
+    def _rewrite_children(
+        children: tuple[object, ...],
+    ) -> list[object]:
+        """Group loose actions into a single ``<actions>`` wrapper.
+
+        ``<handler>`` in the ``interrupts`` schema only accepts
+        ``<conditions>`` and ``<actions>`` children. Emitting loose
+        actions (e.g. ``<resume>``, ``<clear_order_failure>``) directly
+        produces "Unexpected child ... at position N" schema errors
+        and, worse, X4 silently drops the handler at runtime. This
+        rewrite makes the common caller pattern (pass Conditions
+        followed by loose actions) produce valid XML.
+        """
+
+        # Import locally to avoid a circular import with x4md.md.actions.
+        from x4md.md.actions import Actions as _Actions
+
+        meta: list[object] = []
+        actions_wrapper: object | None = None
+        loose_actions: list[object] = []
+
+        for child in children:
+            tag = getattr(child, "tag", None)
+            if tag == "conditions":
+                meta.append(child)
+            elif isinstance(child, _Actions):
+                actions_wrapper = child
+            else:
+                loose_actions.append(child)
+
+        if loose_actions and actions_wrapper is not None:
+            # Caller supplied both an explicit Actions wrapper and loose
+            # actions - merge the loose ones into the wrapper to keep a
+            # single <actions> element.
+            actions_wrapper.children = (  # type: ignore[attr-defined]
+                list(actions_wrapper.children)  # type: ignore[attr-defined]
+                + loose_actions
+            )
+            loose_actions = []
+
+        rewritten: list[object] = list(meta)
+        if actions_wrapper is not None:
+            rewritten.append(actions_wrapper)
+        elif loose_actions:
+            rewritten.append(_Actions(*loose_actions))
+        return rewritten
 
 
 class Wait(OrderChildNode):
@@ -334,80 +395,128 @@ class RemoveWareReservation(OrderChildNode):
         )
 
 
-class SetOrderFailed(OrderChildNode):
-    """Mark current order as failed.
+# Order-state lookup enum declared by ``aiscripts.xsd`` as the
+# ``set_order_state`` ``state`` attribute type. Passing anything outside
+# this set causes X4 to ignore the state change at runtime; the schema
+# rejects it outright.
+VALID_ORDER_STATES: frozenset[str] = frozenset({"orderstate.critical", "orderstate.finish"})
 
-    Maps to X4 AI <set_order_failed> element.
+
+# Default target for the ``order`` attribute on the order-state mutation
+# actions (``set_order_state``, ``set_order_syncpoint_reached``, etc.).
+# The XSD marks ``order`` as required, and every vanilla AI script
+# points it at ``this.order`` to mean "the order currently executing".
+_DEFAULT_ORDER_REF = "this.order"
+
+
+class SetOrderFailed(OrderChildNode):
+    """Mark the current order as failed with a user-visible message.
+
+    Maps to X4 AI ``<set_order_failed>``. The schema requires both
+    ``order`` (the order to mark, usually ``this.order``) and ``text``
+    (the failure message shown to the player).
 
     Args:
-        reason: Optional failure reason
+        text: Failure message expression (usually a ``TextExpr.quote(...)``
+              or a ``TextExpr.ref(...)`` entry).
+        order: Order reference; defaults to ``this.order``.
+        recurring: Whether to repeat the failure message.
 
     Example:
-        SetOrderFailed(reason="'No trade opportunities found'")
+        SetOrderFailed(text=TextExpr.quote("No trade opportunities found"))
     """
 
-    def __init__(self, *, reason: ExprLike | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        text: ExprLike,
+        order: ExprLike = _DEFAULT_ORDER_REF,
+        recurring: ExprLike | None = None,
+    ) -> None:
         super().__init__(
             tag="set_order_failed",
-            attrs=normalize_attrs({"reason": reason}),
+            attrs=normalize_attrs(
+                {"order": order, "text": text, "recurring": recurring}
+            ),
         )
 
 
 class SetOrderState(OrderChildNode):
-    """Set current order state.
+    """Transition the current order into one of the XSD-declared states.
 
-    Maps to X4 AI <set_order_state> element.
+    Maps to X4 AI ``<set_order_state>``. The schema requires ``order``
+    and constrains ``state`` to :data:`VALID_ORDER_STATES`.
 
     Args:
-        state: Order state to set
+        order: Order reference; defaults to ``this.order``.
+        state: Target state. Must be one of :data:`VALID_ORDER_STATES`
+               (``"orderstate.critical"`` or ``"orderstate.finish"``).
+               Passing anything else raises ``ValueError`` because X4
+               silently drops unknown states at runtime.
 
     Example:
-        SetOrderState(state="EXECUTING")
+        SetOrderState(state="orderstate.finish")
     """
 
-    def __init__(self, *, state: str) -> None:
+    def __init__(
+        self,
+        *,
+        state: str | None = None,
+        order: ExprLike = _DEFAULT_ORDER_REF,
+    ) -> None:
+        if state is not None and state not in VALID_ORDER_STATES:
+            valid = ", ".join(sorted(VALID_ORDER_STATES))
+            raise ValueError(
+                f"Invalid <set_order_state state={state!r}>. X4 "
+                f"aiscripts.xsd restricts this to the orderstatelookup "
+                f"enum: {valid}. Pass one of those literals (not "
+                f"free-form strings like 'STARTED', 'EXECUTING', etc.)."
+            )
         super().__init__(
             tag="set_order_state",
-            attrs=normalize_attrs({"state": state}),
+            attrs=normalize_attrs({"order": order, "state": state}),
         )
 
 
 class SetOrderSyncpointReached(OrderChildNode):
-    """Mark order synchronization point reached.
+    """Signal that the order's sync point has been reached.
 
-    Maps to X4 AI <set_order_syncpoint_reached> element. In vanilla X4
-    the element is most often emitted without any attributes, signalling
-    that the order's primary sync point has been reached. A named sync
-    point can optionally be passed via ``value``.
+    Maps to X4 AI ``<set_order_syncpoint_reached>``. The schema requires
+    ``order`` (the order whose sync point to mark). Vanilla scripts
+    always point it at ``this.order``.
 
     Args:
-        value: Optional syncpoint value. When omitted, the element is
-               emitted with no attributes (the common vanilla form).
+        order: Order reference; defaults to ``this.order``.
 
     Example:
         SetOrderSyncpointReached()
-        SetOrderSyncpointReached(value="true")
     """
 
-    def __init__(self, *, value: ExprLike | None = None) -> None:
-        attrs = normalize_attrs({"value": value}) if value is not None else {}
+    def __init__(self, *, order: ExprLike = _DEFAULT_ORDER_REF) -> None:
         super().__init__(
             tag="set_order_syncpoint_reached",
-            attrs=attrs,
+            attrs=normalize_attrs({"order": order}),
         )
 
 
 class ClearOrderFailure(OrderChildNode):
-    """Clear order failure state.
+    """Clear any previously-set failure state on an order.
 
-    Maps to X4 AI <clear_order_failure/> element.
+    Maps to X4 AI ``<clear_order_failure>``. The schema requires
+    ``order``; vanilla scripts always point it at ``this.order``.
+
+    Args:
+        order: Order reference; defaults to ``this.order``.
 
     Example:
         ClearOrderFailure()
     """
 
-    def __init__(self) -> None:
-        super().__init__(tag="clear_order_failure")
+    def __init__(self, *, order: ExprLike = _DEFAULT_ORDER_REF) -> None:
+        super().__init__(
+            tag="clear_order_failure",
+            attrs=normalize_attrs({"order": order}),
+        )
 
 
 class RunScript(OrderChildNode):
@@ -431,30 +540,129 @@ class RunScript(OrderChildNode):
         )
 
 
-class Attention(OrderChildNode):
-    """Set attention object.
+# AI attention levels declared in ``aiscripts.xsd`` (``attentionlookup``).
+# The order element may have up to one ``<attention>`` section per level
+# to give the ship level-specific behavior; ``"unknown"`` is the level
+# assigned to a ship that has not been resolved yet and is the level
+# under which the validator always checks that ``set_order_syncpoint_reached``
+# is reachable.
+VALID_ATTENTION_LEVELS: frozenset[str] = frozenset(
+    {"unknown", "none", "visible", "scanned", "known", "minimal", "standard"}
+)
 
-    Maps to X4 AI <attention> element.
+
+class Attention(OrderChildNode):
+    """Attention-level action block for an AI order.
+
+    Maps to the X4 AI ``<attention>`` element with a required ``min``
+    attribute naming an attention level (see :data:`VALID_ATTENTION_LEVELS`).
+    The element wraps its own ``<actions>`` group, not arbitrary order
+    children, so this class accepts :class:`Actions` children exactly
+    like a ``<handler>`` does.
+
+    Common mistake this class guards against: treating ``<attention>``
+    like a one-shot "look at object X" action by passing an ``object``
+    attribute. X4 actually defines that shape as ``<move_to>`` /
+    ``<run_script>`` / similar blocking actions; the ``<attention>``
+    element is an *attention-level section* wrapper. Emitting
+    ``<attention object="X" min="5s"/>`` inside a ``<do_if>`` produces
+    an order whose execution path re-enters an attention-level branch
+    each tick, the runtime reports ``set_order_syncpoint_reached`` as
+    missing at attention level ``unknown``, and the ship thrashes
+    through the script with ``"returned but no new order in the queue"``
+    messages every frame.
 
     Args:
-        object: Object to pay attention to
-        min: Minimum attention duration
-        max: Maximum attention duration
+        min: Attention level at which the wrapped actions apply. Must
+            be one of :data:`VALID_ATTENTION_LEVELS`.
+        *children: Child nodes for the wrapped ``<actions>`` group.
+            Usually a single :class:`Actions` node.
+        comment: Optional comment for the generated XML.
 
     Example:
-        Attention(object="$target", min="5s", max="10s")
+        Attention(min="unknown", Actions(SetOrderSyncpointReached()))
+    """
+
+    def __init__(
+        self,
+        *children: ActionNode,
+        min: str,
+        comment: str | None = None,
+    ) -> None:
+        if min not in VALID_ATTENTION_LEVELS:
+            valid = ", ".join(sorted(VALID_ATTENTION_LEVELS))
+            raise ValueError(
+                f"Invalid <attention> min={min!r}. X4 aiscripts.xsd "
+                f"restricts this to the attentionlookup enum: {valid}."
+            )
+        super().__init__(
+            tag="attention",
+            attrs=normalize_attrs({"min": min, "comment": comment}),
+            children=list(children),
+        )
+
+
+class MoveTo(OrderChildNode):
+    """Fly an object to a destination (blocking).
+
+    Maps to the X4 AI ``<move_to>`` element. Blocking: the ship actually
+    travels to ``destination`` and the script only advances past this
+    action when the movement resolves. This is the correct primitive for
+    "send the QRF to its staging sector" or "close on the attacker", and
+    is what ``<attention>`` is *not* (see :class:`Attention`).
+
+    Args:
+        object: Object doing the moving (typically ``this.ship``).
+        destination: Target object or position expression.
+        abortpath: Whether existing path points are dropped first.
+        finishonapproach: If true, stop on approach instead of arriving.
+        uselocalhighways: Allow local highways (default true in-game).
+        useblacklist: Faction travel blacklist group name.
+        useknownpath: Restrict to sectors known to the owner faction.
+        flightbehaviour: Flight behaviour lookup.
+        forcerotation: Keep rotating to match final orientation.
+        rollintoturns: Bank into turns during movement.
+        forceposition: Ignore obstacles for the final placement.
+        comment: Optional comment on the generated XML.
+
+    Example:
+        MoveTo(object="this.ship", destination="$stage", finishonapproach=True)
     """
 
     def __init__(
         self,
         *,
         object: ExprLike,
-        min: ExprLike | None = None,
-        max: ExprLike | None = None,
+        destination: ExprLike,
+        abortpath: ExprLike | None = None,
+        finishonapproach: ExprLike | None = None,
+        uselocalhighways: ExprLike | None = None,
+        useblacklist: ExprLike | None = None,
+        useknownpath: ExprLike | None = None,
+        flightbehaviour: ExprLike | None = None,
+        forcerotation: ExprLike | None = None,
+        rollintoturns: ExprLike | None = None,
+        forceposition: ExprLike | None = None,
+        comment: str | None = None,
     ) -> None:
         super().__init__(
-            tag="attention",
-            attrs=normalize_attrs({"object": object, "min": min, "max": max}),
+            tag="move_to",
+            attrs=normalize_attrs(
+                {
+                    "object": object,
+                    "destination": destination,
+                    "abortpath": abortpath,
+                    "finishonapproach": finishonapproach,
+                    "uselocalhighways": uselocalhighways,
+                    "useblacklist": useblacklist,
+                    "useknownpath": useknownpath,
+                    "flightbehaviour": flightbehaviour,
+                    "forcerotation": forcerotation,
+                    "rollintoturns": rollintoturns,
+                    "forceposition": forceposition,
+                    "comment": comment,
+                }
+            ),
         )
 
 

@@ -28,6 +28,10 @@ classifiers = [
 test = [
   "coverage>=7.6",
   "pytest>=8.3",
+  # Schema conformance tests validate every rendered document against
+  # the authoritative X4 XSDs in ../.x4-refs/*. xmlschema is a
+  # pure-Python validator so no C toolchain is required on Windows.
+  "xmlschema>=3.4",
 ]
 
 [tool.setuptools]

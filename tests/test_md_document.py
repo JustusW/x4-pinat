@@ -241,5 +241,57 @@ class OnAbortTests(unittest.TestCase):
         self.assertIn("<on_abort>", xml)
 
 
+class CuePollingAttributeTests(unittest.TestCase):
+    """Tests for ``checkinterval`` / ``onfail`` on polling-only cues."""
+
+    def test_checkinterval_renders_on_pure_check_cue(self) -> None:
+        """A cue whose conditions are only non-event can poll with ``checkinterval``.
+
+        X4's own error message for a bare ``<check_value>`` cue is
+        "Found non-event condition 'check_value', event condition
+        required!". The workaround documented in ``md.xsd`` is
+        ``checkinterval``, which turns the cue into a polling cue.
+        """
+
+        from x4md import CheckValue
+
+        cue = Cue(
+            "AwaitPlayerShip",
+            Conditions(CheckValue("player.ship? and player.ship != null")),
+            checkinterval="5s",
+        )
+        xml = cue.to_xml()
+        self.assertIn('checkinterval="5s"', xml)
+        self.assertIn('<check_value value="player.ship? and player.ship != null"/>', xml)
+
+    def test_checkinterval_with_event_condition_raises(self) -> None:
+        """Mixing ``checkinterval`` with an event condition is rejected."""
+
+        from x4md import CheckValue
+
+        with self.assertRaises(ValueError) as ctx:
+            Cue(
+                "BadCue",
+                Conditions(
+                    EventPlayerCreated(),
+                    CheckValue("player.ship?"),
+                ),
+                checkinterval="5s",
+            )
+        msg = str(ctx.exception)
+        self.assertIn("checkinterval", msg)
+        self.assertIn("event condition", msg)
+
+    def test_onfail_with_event_condition_raises(self) -> None:
+        """Mixing ``onfail`` with an event condition is also rejected."""
+
+        with self.assertRaises(ValueError):
+            Cue(
+                "BadCue",
+                Conditions(EventPlayerCreated()),
+                onfail="cancel",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

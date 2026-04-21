@@ -22,6 +22,7 @@ from x4md import (
     IncludeInterruptActions,
     Interrupts,
     Label,
+    MoveTo,
     Order,
     Param,
     PathExpr,
@@ -44,11 +45,20 @@ class AIScriptTests(unittest.TestCase):
     """Tests for AI-script document structure."""
 
     def test_ai_script_renders_expected_structure(self) -> None:
-        """Complete AI script renders with proper structure.
+        """Complete AI script renders with the schema-correct structure.
 
-        Note: This test uses Actions (MD) with CreateOrder/Resume (AI) which is
-        valid XML but creates a type mismatch. This is a known edge case where
-        handlers in AI scripts use MD Actions wrapper with AI order commands.
+        ``aiscripts.xsd`` defines the ``<aiscript>`` sequence as
+        ``(order|params)?, interrupts?, init?, actions?, attention*,
+        on_abort?``. That means ``<interrupts>``, ``<actions>``, and
+        ``<attention>`` live at the aiscript level, not inside
+        ``<order>``. The Python API lets callers pass everything as
+        ``Order(...)`` children for readability; ``AIScript`` rewrites
+        that tree so the emitted XML matches the schema.
+
+        Without the rewrite, X4 silently ignores the main action body
+        and logs ``set_order_syncpoint_reached is missing ... attention
+        level 'unknown'`` followed by a flood of ``returned but no new
+        order in the queue`` messages for every tick.
         """
         script = AIScript(
             "order.trade.demo",
@@ -80,26 +90,120 @@ class AIScriptTests(unittest.TestCase):
 
         expected = """<?xml version="1.0" encoding="utf-8"?>
 <aiscript name="order.trade.demo" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="aiscripts.xsd" version="3">
-  <order id="DemoOrder" name="{20001, 1101}" description="{20001, 1102}" category="trade" infinite="true">
-    <interrupts>
-      <handler>
-        <conditions>
-          <event_object_signalled object="this.ship" param="'GT_Go'"/>
-        </conditions>
-        <actions>
-          <create_order object="this.ship" id="'DockAndWait'" immediate="true">
-            <param name="destination" value="this.sector"/>
-          </create_order>
-          <resume label="main_loop"/>
-        </actions>
-      </handler>
-    </interrupts>
+  <order id="DemoOrder" name="{20001, 1101}" description="{20001, 1102}" category="trade" infinite="true"/>
+  <interrupts>
+    <handler>
+      <conditions>
+        <event_object_signalled object="this.ship" param="'GT_Go'"/>
+      </conditions>
+      <actions>
+        <create_order object="this.ship" id="'DockAndWait'" immediate="true">
+          <param name="destination" value="this.sector"/>
+        </create_order>
+        <resume label="main_loop"/>
+      </actions>
+    </handler>
+  </interrupts>
+  <actions>
     <wait max="5s"/>
-    <set_order_syncpoint_reached/>
-  </order>
+    <set_order_syncpoint_reached order="this.order"/>
+  </actions>
 </aiscript>"""
 
         self.assertEqual(str(script), expected)
+
+
+class AIScriptRewriteTests(unittest.TestCase):
+    """Verify that ``AIScript`` hoists order children to schema siblings."""
+
+    def test_loose_actions_are_wrapped_into_sibling_actions(self) -> None:
+        """Loose AI actions under ``Order`` become a sibling ``<actions>``."""
+
+        script = AIScript(
+            "order.test.rewrite",
+            Order(
+                "RewriteOrder",
+                SetOrderState(state="orderstate.finish"),
+                SetOrderSyncpointReached(),
+                Wait(max="5s"),
+                category="combat",
+                infinite=True,
+            ),
+        )
+        xml = str(script)
+
+        self.assertIn('<order id="RewriteOrder"', xml)
+        self.assertIn('state="orderstate.finish"', xml)
+        self.assertIn("<actions>", xml)
+        # The order element must close before the actions wrapper
+        # begins, otherwise X4 logs the actions at the wrong place.
+        order_close = xml.index("</order>") if "</order>" in xml else xml.index("/>")
+        actions_open = xml.index("<actions>")
+        self.assertLess(
+            order_close,
+            actions_open,
+            "expected <actions> to appear as a sibling AFTER the <order>",
+        )
+
+    def test_interrupts_become_sibling_of_order(self) -> None:
+        """``Interrupts`` nested inside ``Order`` is hoisted to sibling."""
+
+        script = AIScript(
+            "order.test.interrupts",
+            Order(
+                "InterruptOrder",
+                Interrupts(
+                    Handler(
+                        Conditions(
+                            EventObjectSignalled(
+                                PathExpr.of("this", "ship"),
+                                param=TextExpr.quote("GO"),
+                            )
+                        ),
+                        ClearOrderFailure(),
+                        Resume("poll"),
+                    )
+                ),
+                SetOrderSyncpointReached(),
+                Label("poll"),
+                Wait(max="1s"),
+                Goto("poll"),
+                category="combat",
+                infinite=True,
+            ),
+        )
+        xml = str(script)
+
+        # <interrupts> must appear AFTER <order .../> and BEFORE
+        # <actions>, matching the aiscripts.xsd aiscript sequence.
+        order_self_close = xml.index('/>', xml.index('<order '))
+        interrupts_open = xml.index("<interrupts>")
+        actions_open = xml.index("<actions>")
+        self.assertLess(order_self_close, interrupts_open)
+        self.assertLess(interrupts_open, actions_open)
+
+    def test_attention_sections_become_siblings(self) -> None:
+        """Attention sections are hoisted alongside the main actions."""
+
+        script = AIScript(
+            "order.test.attention",
+            Order(
+                "AttentionOrder",
+                SetOrderSyncpointReached(),
+                Attention(
+                    Actions(Wait(max="10s")),
+                    min="visible",
+                ),
+                category="combat",
+                infinite=True,
+            ),
+        )
+        xml = str(script)
+        self.assertIn('<attention min="visible">', xml)
+        # Attention must follow <actions>, per aiscripts.xsd.
+        actions_close = xml.index("</actions>")
+        attention_open = xml.index("<attention ")
+        self.assertLess(actions_close, attention_open)
 
 
 class AINodeTests(unittest.TestCase):
@@ -152,31 +256,42 @@ class AINodeTests(unittest.TestCase):
         )
 
     def test_order_control_nodes_render_correctly(self) -> None:
-        """Order control helpers render their simple attributes."""
+        """Order control helpers render the XSD-required attributes.
+
+        Every order-state mutation action (``<clear_order_failure>``,
+        ``<set_order_failed>``, ``<set_order_state>``,
+        ``<set_order_syncpoint_reached>``) requires an ``order``
+        attribute per aiscripts.xsd; the Python wrappers default it to
+        ``this.order`` to match every vanilla X4 script.
+        """
+
         self.assertEqual(
             str(ClearOrderFailure()),
-            '<clear_order_failure/>',
+            '<clear_order_failure order="this.order"/>',
         )
         self.assertEqual(
-            str(SetOrderFailed(reason=TextExpr.quote("No route"))),
-            '<set_order_failed reason="\'No route\'"/>',
+            str(SetOrderFailed(text=TextExpr.quote("No route"))),
+            '<set_order_failed order="this.order" text="\'No route\'"/>',
         )
         self.assertEqual(
-            str(SetOrderState(state="STARTED")),
-            '<set_order_state state="STARTED"/>',
-        )
-        self.assertEqual(
-            str(SetOrderSyncpointReached(value=True)),
-            '<set_order_syncpoint_reached value="true"/>',
+            str(SetOrderState(state="orderstate.finish")),
+            '<set_order_state order="this.order" state="orderstate.finish"/>',
         )
         self.assertEqual(
             str(SetOrderSyncpointReached()),
-            '<set_order_syncpoint_reached/>',
+            '<set_order_syncpoint_reached order="this.order"/>',
         )
         self.assertEqual(
             str(IncludeInterruptActions(ref="TradeAbort")),
             '<include_interrupt_actions ref="TradeAbort"/>',
         )
+
+    def test_set_order_state_rejects_free_form_string(self) -> None:
+        """``state`` must be a member of the XSD ``orderstatelookup`` enum."""
+
+        with self.assertRaises(ValueError) as ctx:
+            SetOrderState(state="STARTED")
+        self.assertIn("orderstate.finish", str(ctx.exception))
 
     def test_trade_and_attention_helpers_render_correctly(self) -> None:
         """Trading helpers render explicit attributes without quoting drift."""
@@ -196,9 +311,12 @@ class AINodeTests(unittest.TestCase):
             str(ClampTradeAmount(object="this.ship", tradeoffer="$offer", amount="$amount")),
             '<clamp_trade_amount object="this.ship" tradeoffer="$offer" amount="$amount"/>',
         )
+        attention_xml = str(
+            Attention(min="unknown")
+        )
         self.assertEqual(
-            str(Attention(object="$target", min="5s", max="10s")),
-            '<attention object="$target" min="5s" max="10s"/>',
+            attention_xml,
+            '<attention min="unknown"/>',
         )
         self.assertEqual(
             str(CreatePosition(name="$pos", object="$station", min="1km", max="5km")),
@@ -215,6 +333,52 @@ class AINodeTests(unittest.TestCase):
         xml = str(node)
         self.assertIn('<run_script name="move.tradeship">', xml)
         self.assertIn('<param name="station" value="$target"/>', xml)
+
+
+class AttentionSectionTests(unittest.TestCase):
+    """``<attention>`` is an attention-level section, not an action.
+
+    These tests pin the correct shape so a regression that treats it as
+    an ad-hoc ``"look at X"`` action (which X4 silently accepts but then
+    degrades the script into an infinite return loop) fails loudly.
+    """
+
+    def test_attention_wraps_actions(self) -> None:
+        node = Attention(
+            Actions(SetOrderSyncpointReached()),
+            min="unknown",
+        )
+        xml = str(node)
+        self.assertIn('<attention min="unknown">', xml)
+        self.assertIn('<set_order_syncpoint_reached', xml)
+        self.assertIn('</attention>', xml)
+
+    def test_attention_rejects_unknown_level(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            Attention(Actions(SetOrderSyncpointReached()), min="5s")
+        self.assertIn("attentionlookup", str(ctx.exception))
+
+
+class MoveToTests(unittest.TestCase):
+    """``move_to`` is the blocking travel primitive for AI orders."""
+
+    def test_move_to_basic(self) -> None:
+        xml = str(MoveTo(object="this.ship", destination="$stage"))
+        self.assertIn('<move_to', xml)
+        self.assertIn('object="this.ship"', xml)
+        self.assertIn('destination="$stage"', xml)
+
+    def test_move_to_with_optional_flags(self) -> None:
+        xml = str(
+            MoveTo(
+                object="this.ship",
+                destination="$target",
+                finishonapproach=True,
+                uselocalhighways=False,
+            )
+        )
+        self.assertIn('finishonapproach="true"', xml)
+        self.assertIn('uselocalhighways="false"', xml)
 
 
 class InfiniteOrderValidationTests(unittest.TestCase):

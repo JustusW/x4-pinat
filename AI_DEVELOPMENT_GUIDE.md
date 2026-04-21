@@ -691,6 +691,56 @@ def __init__(self, items: list[str] | None = None) -> None:
     self.items = items if items is not None else []
 ```
 
+### 6. Bareword Nested Keys on Global Tables (Silent In-Game Failure)
+
+X4 MD paths follow a strict convention: every nested key under a
+`$variable` must also be `$`-prefixed (or accessed dynamically as
+`.{expr}`). A bareword segment after a `$`-owner is a *property*
+lookup (think `.count`, `.keys`), not a table key, and is read-only.
+
+If the generator emits a bareword target, X4 silently refuses the
+write at run time and spams `debuglog.txt` with:
+
+```
+Failed to set table[].nextencounterid to value 0
+* Expression: global.$gp.nextencounterid
+```
+
+while the script keeps running on an empty table. This is the hardest
+possible bug to diagnose because the mod's own logging shows nothing
+unusual.
+
+The `validate_md_lvalue` helper in `x4md.md.common` enforces this
+rule at emit time for every l-value action (`SetValue`, `RemoveValue`,
+`AppendToList`, `RemoveFromList`, `CreateList`, `ShuffleList`,
+`SortList`). Any new action that writes to a named target MUST also
+call `validate_md_lvalue` on its target attribute.
+
+```python
+# ❌ WRONG - bareword key raises ValueError at build time
+SetValue("global.$gp.nextencounterid", exact=0)
+
+# ✅ CORRECT - $-prefixed nested key
+SetValue("global.$gp.$nextencounterid", exact=0)
+
+# ✅ CORRECT - dynamic key access (also a valid table key form)
+SetValue("global.$gp.$recentreports.{$sector}", exact="table[]")
+```
+
+When adding a new l-value action:
+
+```python
+from .common import normalize_attrs, validate_md_lvalue
+
+class MyNewSetAction(ActionNode):
+    def __init__(self, name: str, *, exact: ExprLike) -> None:
+        validate_md_lvalue(name, action="MyNewSetAction")
+        super().__init__(
+            tag="my_new_set_action",
+            attrs=normalize_attrs({"name": name, "exact": exact}),
+        )
+```
+
 ## Performance Considerations
 
 ### 1. Use Slots for Data Classes

@@ -7,7 +7,7 @@ from typing import Literal, TypeAlias
 from x4md.core import XmlElement
 from x4md.expressions import ExprLike
 
-from .common import normalize_attrs
+from .common import normalize_attrs, validate_md_lvalue
 from .types import ActionNode, ParamNode
 
 
@@ -67,6 +67,7 @@ class SetValue(ActionNode):
         exact: ExprLike | None = None,
         operation: Operation | None = None,
     ) -> None:
+        validate_md_lvalue(name, action="SetValue")
         super().__init__(
             tag="set_value",
             attrs=normalize_attrs({"name": name, "exact": exact, "operation": operation}),
@@ -181,6 +182,7 @@ class RemoveValue(ActionNode):
     """
 
     def __init__(self, name: str) -> None:
+        validate_md_lvalue(name, action="RemoveValue")
         super().__init__(tag="remove_value", attrs=normalize_attrs({"name": name}))
 
 
@@ -198,6 +200,7 @@ class AppendToList(ActionNode):
     """
 
     def __init__(self, name: str, *, exact: ExprLike) -> None:
+        validate_md_lvalue(name, action="AppendToList")
         super().__init__(
             tag="append_to_list",
             attrs=normalize_attrs({"name": name, "exact": exact}),
@@ -218,6 +221,7 @@ class RemoveFromList(ActionNode):
     """
 
     def __init__(self, name: str, *, exact: ExprLike) -> None:
+        validate_md_lvalue(name, action="RemoveFromList")
         super().__init__(
             tag="remove_from_list",
             attrs=normalize_attrs({"name": name, "exact": exact}),
@@ -677,6 +681,7 @@ class CreateList(ActionNode):
     """
 
     def __init__(self, *, name: str) -> None:
+        validate_md_lvalue(name, action="CreateList")
         super().__init__(tag="create_list", attrs=normalize_attrs({"name": name}))
 
 
@@ -693,26 +698,51 @@ class ShuffleList(ActionNode):
     """
 
     def __init__(self, *, list: str) -> None:
+        validate_md_lvalue(list, action="ShuffleList")
         super().__init__(tag="shuffle_list", attrs=normalize_attrs({"list": list}))
 
 
 class SortList(ActionNode):
     """Sort a list by criteria.
 
-    Maps to X4 MD <sort_list> element.
+    Maps to X4 MD ``<sort_list>`` element (see ``common.xsd``). The XSD
+    requires the list argument to be named ``list`` (the sort criterion
+    is ``sortbyvalue``, not ``sortkey``); emitting the list attribute as
+    ``name`` causes X4 to reject the script at load time with
+    "Required attribute 'list' is missing".
 
     Args:
-        name: List variable name to sort
-        sortkey: Optional sort key expression
+        list: List variable to sort (required).
+        sortbyvalue: Optional expression evaluated per element. The
+            implicit iteration variables are ``loop.element`` and
+            ``loop.index``. Omit to sort by natural value order.
+        sortdescending: When ``True``, sort from highest to lowest.
 
     Example:
-        SortList(name="$stations", sortkey="@$station.name")
+        SortList(
+            list="$sectors",
+            sortbyvalue="global.$gp.encountercounts.{loop.element}",
+            sortdescending=True,
+        )
     """
 
-    def __init__(self, *, name: str, sortkey: ExprLike | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        list: ExprLike,
+        sortbyvalue: ExprLike | None = None,
+        sortdescending: ExprLike | None = None,
+    ) -> None:
+        validate_md_lvalue(list, action="SortList")
         super().__init__(
             tag="sort_list",
-            attrs=normalize_attrs({"name": name, "sortkey": sortkey}),
+            attrs=normalize_attrs(
+                {
+                    "list": list,
+                    "sortbyvalue": sortbyvalue,
+                    "sortdescending": sortdescending,
+                }
+            ),
         )
 
 

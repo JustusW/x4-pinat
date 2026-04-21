@@ -85,6 +85,100 @@ class BasicActionTests(unittest.TestCase):
         self.assertIn('value="true"', str(node))
 
 
+class LValueValidationTests(unittest.TestCase):
+    """Tests that MD l-value paths must $-prefix their table keys.
+
+    X4 silently refuses to set a bareword key under a $variable: the
+    debuglog shows ``Failed to set table[].x to value ...`` and the
+    rest of the script carries on with an empty table. The generator
+    must catch this class of typo before the XML ever reaches the game.
+    """
+
+    def test_set_value_accepts_dollar_prefixed_target(self) -> None:
+        SetValue("global.$gp.$nextencounterid", exact=0)
+
+    def test_set_value_accepts_dynamic_key_target(self) -> None:
+        SetValue("global.$gp.$recentreports.{$sector}", exact="table[]")
+
+    def test_set_value_accepts_plain_local_variable(self) -> None:
+        SetValue("$count", exact=0)
+
+    def test_set_value_accepts_shallow_global(self) -> None:
+        SetValue("global.$gp", exact="table[]")
+
+    def test_set_value_rejects_bareword_child_of_global(self) -> None:
+        with self.assertRaises(ValueError) as cm:
+            SetValue("global.$gp.nextencounterid", exact=0)
+        message = str(cm.exception)
+        self.assertIn("SetValue", message)
+        self.assertIn("nextencounterid", message)
+        self.assertIn("$-prefixed", message)
+
+    def test_set_value_rejects_property_tail(self) -> None:
+        with self.assertRaises(ValueError):
+            SetValue("global.$gp.$encounters.count", exact=0)
+
+    def test_remove_value_rejects_bareword_child(self) -> None:
+        with self.assertRaises(ValueError):
+            RemoveValue("global.$gp.distress")
+
+    def test_append_to_list_rejects_bareword_child(self) -> None:
+        with self.assertRaises(ValueError):
+            AppendToList("global.$gp.encounters", exact="$value")
+
+    def test_remove_from_list_rejects_bareword_child(self) -> None:
+        with self.assertRaises(ValueError):
+            RemoveFromList("global.$gp.encounters", exact="$value")
+
+    def test_create_list_rejects_bareword_child(self) -> None:
+        with self.assertRaises(ValueError):
+            CreateList(name="global.$gp.stagingorder")
+
+    def test_shuffle_list_rejects_bareword_child(self) -> None:
+        with self.assertRaises(ValueError):
+            ShuffleList(list="global.$gp.stagingorder")
+
+    def test_sort_list_rejects_bareword_child(self) -> None:
+        with self.assertRaises(ValueError):
+            SortList(
+                list="global.$gp.stagingorder",
+                sortbyvalue="global.$gp.$encountercounts.{loop.element}",
+            )
+
+    def test_sort_list_accepts_dollar_prefixed_target(self) -> None:
+        SortList(
+            list="global.$gp.$stagingorder",
+            sortbyvalue="global.$gp.$encountercounts.{loop.element}",
+            sortdescending=True,
+        )
+
+    def test_validator_ignores_expressions(self) -> None:
+        """Non-string paths are passed through; Expr callers are responsible
+        for building the string form themselves."""
+
+        # ``PathExpr.of("global", "$gp")`` renders to a string but it's an
+        # Expr at construction time; the validator must not reject it and
+        # must not error on non-string input.
+        SetValue(PathExpr.of("global", "$gp"), exact="table[]")
+
+    def test_validator_passes_through_paths_without_dollar_owners(self) -> None:
+        """A path with no ``$`` owner is out of scope for this rule."""
+
+        # This is a nonsensical target in X4 (you can't set ``foo.bar`` at
+        # the MD root), but we deliberately let it through so the rule
+        # stays surgical. The broader "no bareword l-values" policy is a
+        # separate concern and would need a known-good-roots catalog.
+        SetValue("foo.bar", exact=0)
+
+    def test_validator_tolerates_unbalanced_braces(self) -> None:
+        """An unbalanced ``{`` is almost certainly a bug elsewhere, but
+        the validator itself must not crash the caller on it."""
+
+        # No assertion: merely constructing the node without exception
+        # proves the defensive ``return`` path is reached.
+        SetValue("$weird.{unclosed", exact=0)
+
+
 class ListActionTests(unittest.TestCase):
     """Tests for list manipulation actions."""
 
@@ -394,10 +488,20 @@ class UtilityActionTests(unittest.TestCase):
         self.assertIn('list="$trades"', xml)
 
     def test_sort_list(self):
-        xml = SortList(name="$ships", sortkey="@$ship.name").to_xml()
+        xml = SortList(list="$ships", sortbyvalue="@loop.element.name").to_xml()
         self.assertIn("<sort_list", xml)
-        self.assertIn('name="$ships"', xml)
-        self.assertIn('sortkey="@$ship.name"', xml)
+        self.assertIn('list="$ships"', xml)
+        self.assertIn('sortbyvalue="@loop.element.name"', xml)
+
+    def test_sort_list_descending(self):
+        xml = SortList(
+            list="$sectors",
+            sortbyvalue="global.$gp.counts.{loop.element}",
+            sortdescending=True,
+        ).to_xml()
+        self.assertIn('list="$sectors"', xml)
+        self.assertIn('sortbyvalue="global.$gp.counts.{loop.element}"', xml)
+        self.assertIn('sortdescending="true"', xml)
 
     def test_edit_order_param(self):
         xml = EditOrderParam(object="$ship", orderid="TradeRoutine", param="range", value="3").to_xml()
