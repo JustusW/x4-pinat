@@ -954,8 +954,9 @@ class GetJumpPath(OrderChildNode):
         comment: Optional comment for generated XML.
 
     Raises:
-        TypeError: If ``component`` is omitted (kept keyword-only and
-            required by the XSD).
+        TypeError: If ``component`` is omitted. ``component`` is
+            keyword-only and required by the XSD; Python enforces that
+            at call time.
 
     Example:
         GetJumpPath(
@@ -968,10 +969,9 @@ class GetJumpPath(OrderChildNode):
     def __init__(
         self,
         *,
-        component: ExprLike | None = None,
+        component: ExprLike,
         start: "ExprLike | Start",
         end: "ExprLike | End",
-        result: ExprLike | None = None,
         offset: ExprLike | None = None,
         refobject: ExprLike | None = None,
         multiple: bool | None = None,
@@ -982,23 +982,6 @@ class GetJumpPath(OrderChildNode):
         weight: ExprLike | None = None,
         comment: str | None = None,
     ) -> None:
-        if component is None and result is not None:
-            warnings.warn(
-                "GetJumpPath(result=...) is deprecated: aiscripts.xsd "
-                "names this attribute 'component'. Pass component=... "
-                "instead; 'result' is only accepted for backwards "
-                "compatibility with pre-XSD-contract call sites.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            component = result
-        if component is None:
-            raise TypeError(
-                "GetJumpPath requires 'component=' (the lvalue that "
-                "receives the computed path). aiscripts.xsd declares "
-                "this attribute as required."
-            )
-
         start_node = start if isinstance(start, Start) else Start(object=start)
         end_node = end if isinstance(end, End) else End(object=end)
 

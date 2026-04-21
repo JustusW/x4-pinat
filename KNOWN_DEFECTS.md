@@ -38,14 +38,15 @@ Previous behaviour emitted
 `result`/`start`/`end` attributes that the schema does not allow, and a
 missing `<start>` child).
 
-The class now takes the XSD shape: a required `component=` attribute
-(with a `DeprecationWarning`-flagged `result=` alias for pre-migration
-callers), and either raw expression `start=`/`end=` values (auto-wrapped
-into `<start object="..."/>` / `<end object="..."/>` children) or
-explicit :class:`Start` / :class:`End` nodes for finer-grained control.
+The class now takes the XSD shape: a required `component=` attribute,
+and either raw expression `start=`/`end=` values (auto-wrapped into
+`<start object="..."/>` / `<end object="..."/>` children) or explicit
+`Start` / `End` nodes for finer-grained control.
 
 Added classes: `x4md.x4ai.Start`, `x4md.x4ai.End`. All three
-participate in the XSD contract registry.
+participate in the XSD contract registry. A short-lived `result=`
+alias (with `DeprecationWarning`) existed during the GalaxyProtector
+migration; it has since been removed.
 
 ### 2. `Goto` — RECLASSIFIED AS PERMANENT XSD GAP
 
