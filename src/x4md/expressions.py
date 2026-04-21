@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TypeAlias
+import warnings
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,8 +123,17 @@ class TableEntry:
 
     def render(self) -> str:
         """Render this entry as X4 table assignment syntax."""
-
-        return f"${self.key} = {Expr.render(self.value)}"
+        key = self.key
+        if key.startswith("$"):
+            warnings.warn(
+                (
+                    "TableEntry key should not be prefixed with '$'; "
+                    f"got {key!r}. Normalizing to avoid '$$' output."
+                ),
+                stacklevel=2,
+            )
+            key = key.lstrip("$")
+        return f"${key} = {Expr.render(self.value)}"
 
 class TableExpr(Expr):
     """Helpers for X4 table expressions."""

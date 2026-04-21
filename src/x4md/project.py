@@ -332,10 +332,29 @@ class ExtensionProject:
 
         destination_root = Path(output_dir)
         destination_root.mkdir(parents=True, exist_ok=True)
-        for relative_path, content in self.file_map(include_content=include_content).items():
+        file_map = self.file_map(include_content=include_content)
+        expected_files = set(file_map.keys())
+
+        # Hard purge: remove any existing file not in this generation set.
+        for existing_path in destination_root.rglob("*"):
+            if not existing_path.is_file():
+                continue
+            relative_existing = existing_path.relative_to(destination_root)
+            if relative_existing not in expected_files:
+                existing_path.unlink()
+
+        for relative_path, content in file_map.items():
             destination = destination_root / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(content, encoding="utf-8")
+
+        # Remove directories left empty by purge.
+        for directory in sorted(destination_root.rglob("*"), reverse=True):
+            if directory.is_dir():
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
         return destination_root
 
     def install(

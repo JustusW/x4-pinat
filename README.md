@@ -109,6 +109,10 @@ script = AIScript(
 X4-PINAT can also assemble a full extension folder, including `content.xml`,
 generated MD/AI files, and `t/` localization pages.
 
+Hard purge rule: project writes are strict mirrors. Any file already present in
+the destination but missing from the current generated file map is deleted.
+If it is not generated now, it must not exist after write/install.
+
 ```python
 from x4md import (
     ContentText,
@@ -226,9 +230,11 @@ pytest tests/
 Run with coverage:
 
 ```bash
-coverage run -m pytest tests/
-coverage report
+coverage run --branch -m pytest tests/
+coverage report --fail-under=100 --show-missing
 ```
+
+Coverage goal: maintain 100% line coverage and 100% branch coverage for `x4md`.
 
 ## Repository Layout
 

@@ -28,6 +28,13 @@ from x4md import (
 class ProjectTests(unittest.TestCase):
     """Tests for high-level extension file handling."""
 
+    def test_readme_documents_coverage_goal(self) -> None:
+        readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+        self.assertIn("100% line coverage", readme)
+        self.assertIn("100% branch coverage", readme)
+        self.assertIn("coverage run --branch -m pytest tests/", readme)
+        self.assertIn("coverage report --fail-under=100 --show-missing", readme)
+
     def test_project_api_uses_explicit_ide_friendly_signatures(self) -> None:
         """Public project helpers keep explicit signatures for autocomplete."""
         self.assertNotIn(
@@ -179,6 +186,14 @@ class ProjectTests(unittest.TestCase):
             self.assertTrue((temp_dir / "md" / "demo.xml").exists())
             self.assertTrue((temp_dir / "aiscripts" / "order.demo.xml").exists())
             self.assertTrue((temp_dir / "t" / "0001-l044.xml").exists())
+
+            # Hard purge behavior: stale files are removed.
+            stale_file = temp_dir / "md" / "obsolete.xml"
+            stale_file.parent.mkdir(parents=True, exist_ok=True)
+            stale_file.write_text("<obsolete/>", encoding="utf-8")
+            self.assertTrue(stale_file.exists())
+            project.write(temp_dir)
+            self.assertFalse(stale_file.exists())
 
             install_root = temp_dir / "extensions"
             destination = project.install(install_root)

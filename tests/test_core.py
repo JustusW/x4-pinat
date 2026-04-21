@@ -2,6 +2,7 @@
 
 import warnings
 import unittest
+from unittest.mock import patch
 
 from x4md import (
     Actions,
@@ -88,6 +89,41 @@ class XmlElementTests(unittest.TestCase):
         UncheckableChildren(XmlElement("child")).validate_types()
         UntypedChildren(XmlElement("child")).validate_types()
 
+    def test_validate_types_covers_remaining_branch_paths(self) -> None:
+        """validate_types covers non-XmlElement and fallback branches."""
+
+        class WrapperWithItems(XmlElement):
+            def __init__(self, *items: "MissingType") -> None:
+                super().__init__(tag="wrapper", children=list(items))
+
+        class NonModuleResolvable(XmlElement):
+            __module__ = "x4md.nonexistent_module_for_test"
+
+            def __init__(self, *children: "MissingType") -> None:
+                super().__init__(tag="wrapper", children=list(children))
+
+        class ObjectChildren(XmlElement):
+            def __init__(self, *children: object) -> None:
+                super().__init__(tag="wrapper", children=list(children))
+
+        class ListChildren(XmlElement):
+            def __init__(self, *children: list[int]) -> None:
+                super().__init__(tag="wrapper", children=list(children))
+
+        # Covers the no-*children-parameter recursion branch where non-XmlElement
+        # children are ignored by recursive validation.
+        WrapperWithItems(123, "abc").validate_types()
+
+        # Covers module resolution fallback path when annotation cannot be resolved.
+        NonModuleResolvable(XmlElement("child")).validate_types()
+
+        # Covers typed-child loop path where child matches check_types but is not XmlElement.
+        ObjectChildren(1, "x").validate_types()
+
+        # Covers branch where get_origin is present but get_args is empty.
+        with patch("x4md.core.xml.get_args", return_value=()):
+            ListChildren([1, 2, 3]).validate_types()
+
 
 class ExpressionTests(unittest.TestCase):
     """Tests for typed expression classes."""
@@ -106,6 +142,14 @@ class ExpressionTests(unittest.TestCase):
         self.assertEqual(str(BoolExpr.of(True)), "true")
         self.assertEqual(str(BoolExpr.of(False)), "false")
         self.assertEqual(str(MoneyExpr.of(42)), "42Cr")
+
+    def test_table_entry_warns_and_normalizes_prefixed_keys(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            rendered = str(TableExpr.of(TableEntry("$Sector", "arg1")))
+        self.assertEqual(rendered, "table[$Sector = arg1]")
+        self.assertEqual(len(caught), 1)
+        self.assertIn("should not be prefixed with '$'", str(caught[0].message))
 
 
 class UtilityTests(unittest.TestCase):
