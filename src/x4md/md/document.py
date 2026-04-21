@@ -24,6 +24,8 @@ class MDScript(MDNode):
         )
 
     def to_document(self) -> str:
+        """Render the full MD document including the XML declaration."""
+
         return '<?xml version="1.0" encoding="utf-8"?>\n' + self.to_xml()
 
     def __str__(self) -> str:
@@ -31,11 +33,28 @@ class MDScript(MDNode):
 
 
 class Cues(MDNode):
+    """Container for top-level cue and library nodes.
+
+    Args:
+        *children: Cue-level children to place under ``<cues>``
+    """
+
     def __init__(self, *children: CueChildNode) -> None:
         super().__init__(tag="cues", children=list(children))
 
 
 class Cue(CueChildNode):
+    """Mission Director cue definition.
+
+    Args:
+        name: Cue name
+        *children: Cue child nodes such as conditions and actions
+        ref: Optional cue reference
+        instantiate: Whether X4 should instantiate the cue immediately
+        version: Optional cue version
+        comment: Optional comment for generated XML
+    """
+
     def __init__(
         self,
         name: str,
@@ -61,6 +80,15 @@ class Cue(CueChildNode):
 
 
 class Library(CueChildNode):
+    """Reusable Mission Director library block.
+
+    Args:
+        name: Library name
+        *children: Library child nodes
+        purpose: Optional X4 purpose value
+        comment: Optional comment for generated XML
+    """
+
     def __init__(
         self,
         name: str,
@@ -76,6 +104,13 @@ class Library(CueChildNode):
 
 
 class InputParam(ParamNode):
+    """Input parameter node for library calls.
+
+    Args:
+        name: Parameter name
+        value: Parameter value expression
+    """
+
     def __init__(self, name: str, value: object) -> None:
         super().__init__(
             tag="input_param",

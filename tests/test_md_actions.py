@@ -4,6 +4,7 @@ import unittest
 
 from x4md import (
     Actions,
+    AppendListElements,
     AppendToList,
     Break,
     CancelAllOrders,
@@ -352,6 +353,12 @@ class MiscActionTests(unittest.TestCase):
 
 class UtilityActionTests(unittest.TestCase):
     """Test utility actions added in Phase 1."""
+
+    def test_append_list_elements(self):
+        xml = AppendListElements(name="$allShips", other="$newShips").to_xml()
+        self.assertIn("<append_list_elements", xml)
+        self.assertIn('name="$allShips"', xml)
+        self.assertIn('other="$newShips"', xml)
 
     def test_set_skill(self):
         xml = SetSkill(object="$npc", skill="engineering", exact="3").to_xml()

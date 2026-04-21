@@ -10,6 +10,22 @@ from .types import AINode, InterruptNode, OrderChildNode
 
 
 class Order(OrderChildNode):
+    """Top-level AI order definition.
+
+    Visible `name` and `description` values usually point at t-file entries,
+    for example ``TextExpr.ref(77000, 10002)``.
+
+    Args:
+        id: Internal order id used when creating the order
+        *children: Order child nodes such as interrupts or steps
+        name: Visible order label, usually a t-file reference
+        description: Visible order description, usually a t-file reference
+        category: X4 order category such as ``trade`` or ``fight``
+        infinite: Whether the order repeats indefinitely
+        allowinloop: Whether the order is allowed inside order loops
+        canplayercancel: Whether the player can cancel the order manually
+    """
+
     def __init__(
         self,
         id: str,
@@ -39,16 +55,36 @@ class Order(OrderChildNode):
 
 
 class Requires(OrderChildNode):
+    """Container for AI preconditions.
+
+    Args:
+        *children: AI or condition nodes evaluated before the order runs
+    """
+
     def __init__(self, *children: AINode | ConditionNode) -> None:
         super().__init__(tag="requires", children=list(children))
 
 
 class Interrupts(OrderChildNode):
+    """Container for AI interrupt handlers.
+
+    Args:
+        *children: Interrupt handlers for the order
+    """
+
     def __init__(self, *children: InterruptNode) -> None:
         super().__init__(tag="interrupts", children=list(children))
 
 
 class Handler(InterruptNode):
+    """Interrupt handler for AI orders.
+
+    Args:
+        *children: Conditions and actions used by the handler
+        ref: Optional handler reference
+        comment: Optional comment for generated XML
+    """
+
     def __init__(
         self,
         *children: AINode | ConditionNode | ActionNode | CueChildNode,
@@ -68,6 +104,16 @@ class Handler(InterruptNode):
 
 
 class Wait(OrderChildNode):
+    """Pause execution for a duration or until child conditions resolve.
+
+    Args:
+        *children: Optional AI or condition children
+        exact: Exact wait duration
+        min: Minimum wait duration
+        max: Maximum wait duration
+        comment: Optional comment for generated XML
+    """
+
     def __init__(
         self,
         *children: AINode | ConditionNode,
@@ -84,11 +130,26 @@ class Wait(OrderChildNode):
 
 
 class Resume(OrderChildNode):
+    """Resume execution at the given label.
+
+    Args:
+        label: Label to resume from
+    """
+
     def __init__(self, label: str | None = None) -> None:
         super().__init__(tag="resume", attrs=normalize_attrs({"label": label}))
 
 
 class CreateOrder(OrderChildNode):
+    """Create an AI order on an object.
+
+    Args:
+        object: Target object for the created order
+        id: Order id expression, commonly ``TextExpr.quote(...)``
+        *children: Parameter nodes for the created order
+        immediate: Whether the order should start immediately
+    """
+
     def __init__(
         self,
         object: ExprLike,
@@ -104,11 +165,23 @@ class CreateOrder(OrderChildNode):
 
 
 class Label(OrderChildNode):
+    """Define a jump label inside an AI order.
+
+    Args:
+        name: Label name
+    """
+
     def __init__(self, name: str) -> None:
         super().__init__(tag="label", attrs=normalize_attrs({"name": name}))
 
 
 class Goto(OrderChildNode):
+    """Jump to a named label inside an AI order.
+
+    Args:
+        label: Label name to jump to
+    """
+
     def __init__(self, label: str) -> None:
         super().__init__(tag="goto", attrs=normalize_attrs({"label": label}))
 
@@ -477,7 +550,7 @@ class SetCommand(OrderChildNode):
         command: Command to set
 
     Example:
-        SetCommand(command="'Attack'")
+        SetCommand(command="command.trade")
     """
 
     def __init__(self, *, command: ExprLike) -> None:
@@ -496,7 +569,7 @@ class SetCommandAction(OrderChildNode):
         commandaction: Action to set
 
     Example:
-        SetCommandAction(commandaction="'attacking'")
+        SetCommandAction(commandaction="commandaction.searchingtrades")
     """
 
     def __init__(self, *, commandaction: ExprLike) -> None:

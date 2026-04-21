@@ -51,6 +51,25 @@ class EventObjectSignalled(ConditionNode):
         )
 
 
+class EventObjectAttacked(ConditionNode):
+    """Event triggered when an object is attacked.
+
+    Maps to X4 MD/AI <event_object_attacked> element.
+
+    Args:
+        object: Object to monitor for attack events
+
+    Example:
+        EventObjectAttacked(object="this.ship")
+    """
+
+    def __init__(self, *, object: ExprLike) -> None:
+        super().__init__(
+            tag="event_object_attacked",
+            attrs=normalize_attrs({"object": object}),
+        )
+
+
 class CheckAll(ConditionNode):
     """Conjunction of multiple conditions (all must be true).
 

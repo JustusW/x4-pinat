@@ -10,12 +10,18 @@ from x4md import (
     EventCueSignalled,
     EventGameLoaded,
     EventGameSaved,
+    EventObjectAttacked,
     EventObjectChangedZone,
     EventObjectDestroyed,
     EventObjectOrderReady,
     EventObjectSignalled,
+    EventObjectChangedSector,
     EventPlayerAssignedHiredActor,
     EventPlayerCreated,
+    MatchDistance,
+    MatchDock,
+    Match,
+    MatchRelationTo,
     EventUITriggered,
     PathExpr,
     TextExpr,
@@ -93,6 +99,11 @@ class ObjectEventTests(unittest.TestCase):
         self.assertIn('object="player.galaxy"', xml)
         self.assertIn("param=\"'GT_Test'\"", xml)
 
+    def test_event_object_attacked_renders_correctly(self) -> None:
+        """EventObjectAttacked renders with object attribute."""
+        node = EventObjectAttacked(object="player.galaxy")
+        self.assertEqual(str(node), '<event_object_attacked object="player.galaxy"/>')
+
     def test_event_object_order_ready_renders_correctly(self) -> None:
         """EventObjectOrderReady renders with object and optional comment."""
         node = EventObjectOrderReady(object="player.galaxy", comment="Monitor orders")
@@ -115,6 +126,11 @@ class ObjectEventTests(unittest.TestCase):
         """EventObjectChangedZone renders with object attribute."""
         node = EventObjectChangedZone(object="$ship")
         self.assertIn('object="$ship"', str(node))
+
+    def test_event_object_changed_sector_renders_correctly(self) -> None:
+        """EventObjectChangedSector renders with object attribute."""
+        node = EventObjectChangedSector(object="this.ship")
+        self.assertEqual(str(node), '<event_object_changed_sector object="this.ship"/>')
 
 
 class UIEventTests(unittest.TestCase):
@@ -172,6 +188,25 @@ class MatchConditionTests(unittest.TestCase):
         self.assertIn("<match_gate_distance", xml)
         self.assertIn('object="player.ship"', xml)
         self.assertIn('max="3"', xml)
+
+    def test_match_distance_relation_and_dock_render_correctly(self) -> None:
+        """Additional match helpers render their explicit attributes."""
+        self.assertEqual(
+            str(Match(owner="faction.player", class_="ship_arg_m", max=5)),
+            '<match owner="faction.player" class="ship_arg_m" max="5"/>',
+        )
+        self.assertEqual(
+            str(MatchDistance(object="player.ship", min="5km", max="20km")),
+            '<match_distance object="player.ship" min="5km" max="20km"/>',
+        )
+        self.assertEqual(
+            str(MatchDock(object="$station", state="docking")),
+            '<match_dock object="$station" state="docking"/>',
+        )
+        self.assertEqual(
+            str(MatchRelationTo(object="faction.player", comparison="ge", relation=0)),
+            '<match_relation_to object="faction.player" comparison="ge" relation="0"/>',
+        )
 
     def test_match_gate_distance_range(self):
         from x4md import MatchGateDistance

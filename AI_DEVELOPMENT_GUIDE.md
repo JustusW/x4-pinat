@@ -226,12 +226,12 @@ class RenderingTests(unittest.TestCase):
         self.assertIn('</do_if>', xml)
 ```
 
-**Coverage requirements:**
-- **100% line coverage** (run: `coverage run -m pytest && coverage report`)
-- **100% branch coverage** where applicable
-- Test both success and error paths
+**Coverage expectations:**
+- Add focused tests for every new public API or node you introduce
+- Exercise both success and error paths where the API has meaningful failure modes
 - Test with and without optional parameters
-- Test edge cases (empty children, None values, etc.)
+- Test edge cases (empty children, `None` values, escaping, etc.)
+- Use coverage reports to find blind spots, not as the sole definition of quality
 
 **Test organization:**
 ```
@@ -497,14 +497,15 @@ def test_append_to_list_with_expression(self) -> None:
     self.assertIn('exact="this.ship"', xml)
 ```
 
-### Step 6: Verify Coverage
+### Step 6: Review Coverage
 
 ```bash
 coverage run -m pytest
 coverage report
 ```
 
-Target: 100% coverage on new code.
+Goal: make sure the new surface area is intentionally tested and that the
+coverage report does not reveal obvious blind spots.
 
 ## Code Quality Checklist
 
@@ -620,7 +621,7 @@ coverage html
 # Open htmlcov/index.html in browser
 ```
 
-**Target: 100% coverage** for all new code.
+Use the report to spot untested branches or helper paths before submitting.
 
 ## Common Pitfalls
 
@@ -768,7 +769,7 @@ def test_new_action_renders_correctly(self) -> None:
     node = NewAction("test")
     self.assertEqual(str(node), '<new_action required="test"/>')
 
-# 4. Verify coverage
+# 4. Review coverage
 coverage run -m pytest && coverage report
 ```
 

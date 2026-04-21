@@ -9,12 +9,14 @@ from x4md import (
     Cue,
     Cues,
     DebugText,
+    Delay,
     DoElse,
     DoIf,
     EventGameLoaded,
     EventObjectSignalled,
     EventPlayerCreated,
     InputParam,
+    Library,
     MDScript,
     Param,
     PathExpr,
@@ -81,6 +83,27 @@ class MDDocumentTests(unittest.TestCase):
 </mdscript>"""
 
         self.assertEqual(str(document), expected)
+
+    def test_document_helpers_render_library_delay_and_str_consistently(self) -> None:
+        """Document-level helpers render their wrapper XML correctly."""
+        cue = Cue(
+            "DelayedInit",
+            Delay(exact="5s"),
+            instantiate=True,
+            comment="demo",
+        )
+        library = Library(
+            "Demo.Library",
+            Actions(DebugText(TextExpr.quote("Hello"))),
+            purpose="run_actions",
+        )
+        document = MDScript(name="DemoDoc", cues=Cues(cue, library))
+
+        xml = str(document)
+        self.assertIn('<cue name="DelayedInit" instantiate="true" comment="demo">', xml)
+        self.assertIn('<delay exact="5s"/>', xml)
+        self.assertIn('<library name="Demo.Library" purpose="run_actions">', xml)
+        self.assertEqual(document.to_document(), xml)
 
     def test_library_and_flow_nodes_render_expected_xml(self) -> None:
         """Library references and flow control render correctly."""

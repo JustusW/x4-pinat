@@ -1,8 +1,15 @@
 """Tests for core XML and expression primitives."""
 
+import warnings
 import unittest
 
 from x4md import (
+    Actions,
+    CheckValue,
+    Conditions,
+    Cue,
+    Cues,
+    Params,
     BoolExpr,
     Dynamic,
     Expr,
@@ -46,6 +53,41 @@ class XmlElementTests(unittest.TestCase):
             "<wrapper>\n  <one/>\n  <two/>\n</wrapper>",
         )
 
+    def test_validate_types_checks_typed_children_and_wrappers(self) -> None:
+        """validate_types handles correct children, wrappers, and warnings."""
+        Conditions(CheckValue("$ready")).validate_types()
+        Cue("Init", Conditions(CheckValue("$ready"))).validate_types()
+        Cues(Cue("Init")).validate_types()
+
+        bad = Params(CheckValue("$ready"))
+        with self.assertRaises(TypeError):
+            bad.validate_types()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            bad.validate_types(strict=False)
+        self.assertEqual(len(caught), 1)
+        self.assertIn("expects children of type", str(caught[0].message))
+
+    def test_validate_types_skips_unresolvable_or_uncheckable_annotations(self) -> None:
+        """validate_types gracefully skips cases it cannot validate."""
+
+        class UnresolvedChildren(XmlElement):
+            def __init__(self, *children: "MissingType") -> None:
+                super().__init__(tag="wrapper", children=list(children))
+
+        class UncheckableChildren(XmlElement):
+            def __init__(self, *children: tuple[str, ...]) -> None:
+                super().__init__(tag="wrapper", children=list(children))
+
+        class UntypedChildren(XmlElement):
+            def __init__(self, *children) -> None:
+                super().__init__(tag="wrapper", children=list(children))
+
+        UnresolvedChildren(XmlElement("child")).validate_types()
+        UncheckableChildren(XmlElement("child")).validate_types()
+        UntypedChildren(XmlElement("child")).validate_types()
+
 
 class ExpressionTests(unittest.TestCase):
     """Tests for typed expression classes."""
@@ -53,6 +95,7 @@ class ExpressionTests(unittest.TestCase):
     def test_expression_helpers_render_expected_strings(self) -> None:
         """Expression helpers render correct X4 syntax."""
         self.assertEqual(str(TextExpr.quote("hello")), "'hello'")
+        self.assertEqual(str(TextExpr.ref(77000, 10002)), "{77000, 10002}")
         self.assertEqual(str(PathExpr.of("global", "$GT", Dynamic("ship"))), "global.$GT.{ship}")
         self.assertEqual(str(ListExpr.of(1, True, TextExpr.quote("x"))), "[1, true, 'x']")
         self.assertEqual(

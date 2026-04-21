@@ -44,7 +44,8 @@ script = AIScript(
             )
         ),
         Wait(max="5s"),
-        name=TextExpr.quote("Demo Order"),
+        name=TextExpr.ref(20001, 1101),
+        description=TextExpr.ref(20001, 1102),
         category="trade",
         infinite=True,
     ),
