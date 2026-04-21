@@ -93,7 +93,7 @@ class MDDocumentTests(unittest.TestCase):
             comment="demo",
         )
         library = Library(
-            "Demo.Library",
+            "Demo_Library",
             Actions(DebugText(TextExpr.quote("Hello"))),
             purpose="run_actions",
         )
@@ -102,16 +102,18 @@ class MDDocumentTests(unittest.TestCase):
         xml = str(document)
         self.assertIn('<cue name="DelayedInit" instantiate="true" comment="demo">', xml)
         self.assertIn('<delay exact="5s"/>', xml)
-        self.assertIn('<library name="Demo.Library" purpose="run_actions">', xml)
+        self.assertIn('<library name="Demo_Library" purpose="run_actions">', xml)
         self.assertEqual(document.to_document(), xml)
 
     def test_library_and_flow_nodes_render_expected_xml(self) -> None:
-        """Library references and flow control render correctly."""
-        node = Cue(
-            "HandleSignal",
-            Conditions(
-                EventObjectSignalled(PathExpr.of("player", "galaxy"), param=TextExpr.quote("GT_Test"))
-            ),
+        """Library references and flow control render correctly.
+
+        ``<return>`` is deliberately placed inside a ``<library>`` in
+        this fixture because X4 only accepts the tag in library
+        actions; ``Cue`` rejects it at construction time.
+        """
+        library = Library(
+            "HandleSignalLib",
             Actions(
                 RunActions(
                     "md.Test.Lib",
@@ -132,13 +134,9 @@ class MDDocumentTests(unittest.TestCase):
                     ),
                 ),
             ),
-            instantiate=True,
         )
 
-        expected = """<cue name="HandleSignal" instantiate="true">
-  <conditions>
-    <event_object_signalled object="player.galaxy" param="'GT_Test'"/>
-  </conditions>
+        expected = """<library name="HandleSignalLib">
   <actions>
     <run_actions ref="md.Test.Lib" result="$ok">
       <param name="ship" value="this.ship"/>
@@ -151,9 +149,9 @@ class MDDocumentTests(unittest.TestCase):
       </do_else>
     </do_if>
   </actions>
-</cue>"""
+</library>"""
 
-        self.assertEqual(str(node), expected)
+        self.assertEqual(str(library), expected)
 
 
 class ParamTests(unittest.TestCase):

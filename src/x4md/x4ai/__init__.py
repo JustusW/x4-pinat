@@ -2,6 +2,7 @@
 
 from .document import AIScript
 from .nodes import (
+    VALID_ORDER_CATEGORIES,
     AddWareReservation,
     Attention,
     ClampTradeAmount,
@@ -26,6 +27,7 @@ from .nodes import (
     SetOrderState,
     SetOrderSyncpointReached,
     Wait,
+    X4OrderCategoryWarning,
 )
 from .types import AINode, InterruptNode, OrderChildNode
 
@@ -57,5 +59,7 @@ __all__ = [
     "SetOrderFailed",
     "SetOrderState",
     "SetOrderSyncpointReached",
+    "VALID_ORDER_CATEGORIES",
     "Wait",
+    "X4OrderCategoryWarning",
 ]

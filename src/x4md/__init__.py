@@ -14,6 +14,7 @@ from .expressions import (
     TableEntry,
     TableExpr,
     TextExpr,
+    X4ExpressionWarning,
 )
 from .project import (
     ContentDependency,
@@ -121,9 +122,12 @@ from .md import (
     SortList,
     SortTrades,
     SubstituteText,
+    VALID_LOGBOOK_CATEGORIES,
+    VALID_LOGBOOK_INTERACTIONS,
     WriteToLogbook,
 )
 from .x4ai import (
+    VALID_ORDER_CATEGORIES,
     AINode,
     AIScript,
     AddWareReservation,
@@ -152,6 +156,7 @@ from .x4ai import (
     SetOrderState,
     SetOrderSyncpointReached,
     Wait,
+    X4OrderCategoryWarning,
 )
 
 __all__ = [
@@ -295,6 +300,11 @@ __all__ = [
     "TableEntry",
     "TableExpr",
     "TextExpr",
+    "VALID_LOGBOOK_CATEGORIES",
+    "VALID_LOGBOOK_INTERACTIONS",
+    "VALID_ORDER_CATEGORIES",
+    "X4ExpressionWarning",
+    "X4OrderCategoryWarning",
     "TranslationEntry",
     "TranslationPage",
     "Wait",

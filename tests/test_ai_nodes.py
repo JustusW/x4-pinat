@@ -1,6 +1,7 @@
 """Tests for AI-script nodes."""
 
 import unittest
+import warnings
 
 from x4md import (
     AddWareReservation,
@@ -35,6 +36,7 @@ from x4md import (
     SetOrderSyncpointReached,
     TextExpr,
     Wait,
+    X4OrderCategoryWarning,
 )
 
 
@@ -67,6 +69,7 @@ class AIScriptTests(unittest.TestCase):
                     )
                 ),
                 Wait(max="5s"),
+                SetOrderSyncpointReached(),
                 name=TextExpr.ref(20001, 1101),
                 description=TextExpr.ref(20001, 1102),
                 category="trade",
@@ -92,6 +95,7 @@ class AIScriptTests(unittest.TestCase):
       </handler>
     </interrupts>
     <wait max="5s"/>
+    <set_order_syncpoint_reached/>
   </order>
 </aiscript>"""
 
@@ -166,6 +170,10 @@ class AINodeTests(unittest.TestCase):
             '<set_order_syncpoint_reached value="true"/>',
         )
         self.assertEqual(
+            str(SetOrderSyncpointReached()),
+            '<set_order_syncpoint_reached/>',
+        )
+        self.assertEqual(
             str(IncludeInterruptActions(ref="TradeAbort")),
             '<include_interrupt_actions ref="TradeAbort"/>',
         )
@@ -207,6 +215,100 @@ class AINodeTests(unittest.TestCase):
         xml = str(node)
         self.assertIn('<run_script name="move.tradeship">', xml)
         self.assertIn('<param name="station" value="$target"/>', xml)
+
+
+class InfiniteOrderValidationTests(unittest.TestCase):
+    """Tests for ``Order(infinite=True)`` sync-point enforcement.
+
+    X4 logs ``AI order '<id>' is infinite but action
+    <set_order_syncpoint_reached> is missing`` and then spams the log
+    with ``returned but no new order in the queue`` every tick if a
+    ship enters an infinite order that never marks a sync point. The
+    ``Order`` constructor validates this up-front so the broken script
+    never reaches the engine.
+    """
+
+    def test_infinite_order_without_syncpoint_raises(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            Order("QRF", Wait(max="5s"), infinite=True)
+        message = str(ctx.exception)
+        self.assertIn("QRF", message)
+        self.assertIn("SetOrderSyncpointReached", message)
+
+    def test_infinite_order_with_syncpoint_passes(self) -> None:
+        Order(
+            "QRF",
+            Wait(max="5s"),
+            SetOrderSyncpointReached(),
+            infinite=True,
+        )
+
+    def test_infinite_order_detects_nested_syncpoint(self) -> None:
+        Order(
+            "QRF",
+            Interrupts(
+                Handler(
+                    Conditions(CheckValue("$ok")),
+                    Actions(SetOrderSyncpointReached()),
+                )
+            ),
+            Wait(max="5s"),
+            infinite=True,
+        )
+
+    def test_non_infinite_order_does_not_require_syncpoint(self) -> None:
+        Order("QRF", Wait(max="5s"))
+        Order("QRF", Wait(max="5s"), infinite=False)
+
+
+class OrderCategoryWarningTests(unittest.TestCase):
+    """Tests for the AI ``Order`` ``category`` XSD-alignment warning.
+
+    The XSD ``ordercategorylookup`` enum lists a closed set of order
+    categories; values outside that set (notably the common ``"fight"``
+    vs. ``"combat"`` confusion) should surface as a warning so modders
+    know the UI may categorise the order differently from what they
+    expect. The warning is non-fatal because X4 accepts undocumented
+    values at runtime today.
+    """
+
+    def test_known_categories_do_not_warn(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            for category in (
+                "internal",
+                "navigation",
+                "combat",
+                "trade",
+                "mining",
+                "coordination",
+                "salvage",
+            ):
+                Order("QRF", Wait(max="5s"), category=category)
+        category_warnings = [
+            w for w in caught if issubclass(w.category, X4OrderCategoryWarning)
+        ]
+        self.assertEqual(category_warnings, [])
+
+    def test_unknown_category_warns(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Order("QRF", Wait(max="5s"), category="fight")
+        category_warnings = [
+            w for w in caught if issubclass(w.category, X4OrderCategoryWarning)
+        ]
+        self.assertEqual(len(category_warnings), 1)
+        self.assertIn("fight", str(category_warnings[0].message))
+        self.assertIn("combat", str(category_warnings[0].message))
+
+    def test_none_category_does_not_warn(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Order("QRF", Wait(max="5s"))
+        category_warnings = [
+            w for w in caught if issubclass(w.category, X4OrderCategoryWarning)
+        ]
+        self.assertEqual(category_warnings, [])
 
 
 if __name__ == "__main__":

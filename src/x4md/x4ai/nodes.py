@@ -2,11 +2,50 @@
 
 from __future__ import annotations
 
+import warnings
+
 from x4md.expressions import ExprLike
 from x4md.md.common import normalize_attrs
 from x4md.md.types import ActionNode, ConditionNode, CueChildNode, ParamNode
 
 from .types import AINode, InterruptNode, OrderChildNode
+
+
+# AI order categories declared by ``aiscripts.xsd``
+# (``ordercategorylookup``). In practice, vanilla extensions and mods
+# sometimes use additional strings (notably ``"fight"``) that X4
+# appears to accept without complaint, so we only *warn* when a value
+# is outside the known enum rather than raising. Setting
+# ``warnings.simplefilter("error", X4OrderCategoryWarning)`` in strict
+# builds will promote the warning to an error.
+VALID_ORDER_CATEGORIES: frozenset[str] = frozenset(
+    {
+        "internal",
+        "navigation",
+        "combat",
+        "trade",
+        "mining",
+        "coordination",
+        "salvage",
+    }
+)
+
+
+class X4OrderCategoryWarning(UserWarning):
+    """Emitted when an AI ``<order category="...">`` value is outside
+    the XSD-declared ``ordercategorylookup`` enum."""
+
+
+def _contains_syncpoint(nodes: tuple[object, ...]) -> bool:
+    """Return ``True`` if any descendant is a ``SetOrderSyncpointReached``."""
+
+    for node in nodes:
+        if isinstance(node, SetOrderSyncpointReached):
+            return True
+        child_nodes = getattr(node, "children", None)
+        if child_nodes and _contains_syncpoint(tuple(child_nodes)):
+            return True
+    return False
 
 
 class Order(OrderChildNode):
@@ -24,6 +63,14 @@ class Order(OrderChildNode):
         infinite: Whether the order repeats indefinitely
         allowinloop: Whether the order is allowed inside order loops
         canplayercancel: Whether the player can cancel the order manually
+
+    Raises:
+        ValueError: If ``infinite=True`` is set but no
+            ``SetOrderSyncpointReached`` action is present in the order
+            tree. Without it, X4 logs:
+            ``AI order '<id>' is infinite but action
+            <set_order_syncpoint_reached> is missing`` and the ship
+            enters a zombie loop where no follow-up orders ever apply.
     """
 
     def __init__(
@@ -37,6 +84,27 @@ class Order(OrderChildNode):
         allowinloop: bool | None = None,
         canplayercancel: bool | None = None,
     ) -> None:
+        if infinite is True and not _contains_syncpoint(children):
+            raise ValueError(
+                f"Order {id!r} declares infinite=True but is missing a "
+                "SetOrderSyncpointReached action. X4 rejects infinite "
+                "orders without a sync point and will spam 'returned but "
+                "no new order in the queue' while the ship is stuck."
+            )
+        if category is not None and category not in VALID_ORDER_CATEGORIES:
+            valid = ", ".join(sorted(VALID_ORDER_CATEGORIES))
+            warnings.warn(
+                (
+                    f"Order {id!r} uses category={category!r}, which is "
+                    "not in the aiscripts.xsd ordercategorylookup enum "
+                    f"({valid}). X4 may accept this at runtime but the "
+                    "order will likely be miscategorised in the UI or "
+                    "fall back to a default. Common typo: 'fight' vs "
+                    "'combat'."
+                ),
+                X4OrderCategoryWarning,
+                stacklevel=2,
+            )
         super().__init__(
             tag="order",
             attrs=normalize_attrs(
@@ -307,19 +375,25 @@ class SetOrderState(OrderChildNode):
 class SetOrderSyncpointReached(OrderChildNode):
     """Mark order synchronization point reached.
 
-    Maps to X4 AI <set_order_syncpoint_reached> element.
+    Maps to X4 AI <set_order_syncpoint_reached> element. In vanilla X4
+    the element is most often emitted without any attributes, signalling
+    that the order's primary sync point has been reached. A named sync
+    point can optionally be passed via ``value``.
 
     Args:
-        value: Syncpoint value
+        value: Optional syncpoint value. When omitted, the element is
+               emitted with no attributes (the common vanilla form).
 
     Example:
+        SetOrderSyncpointReached()
         SetOrderSyncpointReached(value="true")
     """
 
-    def __init__(self, *, value: ExprLike) -> None:
+    def __init__(self, *, value: ExprLike | None = None) -> None:
+        attrs = normalize_attrs({"value": value}) if value is not None else {}
         super().__init__(
             tag="set_order_syncpoint_reached",
-            attrs=normalize_attrs({"value": value}),
+            attrs=attrs,
         )
 
 

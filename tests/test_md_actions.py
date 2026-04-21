@@ -249,9 +249,17 @@ class OrderActionTests(unittest.TestCase):
         self.assertNotIn('immediate=', xml)
 
     def test_cancel_order_renders_correctly(self) -> None:
-        """CancelOrder renders with object attribute."""
-        node = CancelOrder(object="$ship")
-        self.assertEqual(str(node), '<cancel_order object="$ship"/>')
+        """CancelOrder renders with order attribute (matches X4 XSD)."""
+        node = CancelOrder(order="$order")
+        self.assertEqual(str(node), '<cancel_order order="$order"/>')
+
+    def test_cancel_order_renders_with_keepinloop(self) -> None:
+        """CancelOrder passes through the optional keepinloop flag."""
+        node = CancelOrder(order="$order", keepinloop=True)
+        self.assertEqual(
+            str(node),
+            '<cancel_order order="$order" keepinloop="true"/>',
+        )
 
     def test_cancel_all_orders_renders_correctly(self) -> None:
         """CancelAllOrders renders with object attribute."""
@@ -268,14 +276,16 @@ class UIActionTests(unittest.TestCase):
             category="upkeep",
             title=TextExpr.quote("Trade Complete"),
             text=TextExpr.quote("Profit: 1000Cr"),
-            interaction="$ship",
+            interaction="guidance",
+            object="$ship",
             money=MoneyExpr.of(1000),
         )
         xml = str(node)
         self.assertIn('category="upkeep"', xml)
         self.assertIn("title=\"'Trade Complete'\"", xml)
         self.assertIn("text=\"'Profit: 1000Cr'\"", xml)
-        self.assertIn('interaction="$ship"', xml)
+        self.assertIn('interaction="guidance"', xml)
+        self.assertIn('object="$ship"', xml)
         self.assertIn('money="1000Cr"', xml)
 
     def test_write_to_logbook_with_minimal_params(self) -> None:

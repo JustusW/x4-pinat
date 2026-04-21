@@ -3,8 +3,63 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import TypeAlias
 import warnings
+
+
+# Matches the infamous ``not $var in LIST`` precedence trap. In X4's
+# expression grammar, unary ``not`` binds tighter than the binary ``in``
+# operator, so ``not $asset in $list`` parses as
+# ``(not $asset) in $list`` and then fails at load time with
+# ``Error while parsing expression: Operator expected``. The fix is
+# always to parenthesise the membership test, e.g.
+# ``not ($asset in $list)``. To avoid false positives on string
+# literals that happen to contain the word "not", the regex only
+# triggers when the operand looks like a ``$``-prefixed X4 variable
+# reference (which is what ``in`` membership tests almost always
+# operate on).
+_NOT_IN_PRECEDENCE_RE = re.compile(
+    r"""
+    (?<![A-Za-z0-9_$.])     # `not` must start on a word boundary
+    not\s+                  # literal operator + whitespace
+    (?!\()                  # reject already-parenthesised operands
+    \$[A-Za-z_][A-Za-z0-9_.{}]*  # $variable-like operand
+    \s+in\s                 # unparenthesised binary `in`
+    """,
+    re.VERBOSE,
+)
+
+
+def _warn_suspicious_expression(source: str) -> None:
+    """Emit ``X4ExpressionWarning`` for well-known precedence traps.
+
+    Only static, obviously broken patterns are flagged. The goal is to
+    prevent silent ``Operator expected`` parse failures at load time
+    without producing false positives on legitimate expressions.
+    """
+
+    if _NOT_IN_PRECEDENCE_RE.search(source):
+        warnings.warn(
+            (
+                "Suspicious X4 expression: `not X in Y` parses as "
+                "`(not X) in Y` due to operator precedence and "
+                "triggers 'Error while parsing expression: Operator "
+                f"expected' in X4. Use `not (X in Y)` instead. "
+                f"Offending source: {source!r}"
+            ),
+            X4ExpressionWarning,
+            stacklevel=3,
+        )
+
+
+class X4ExpressionWarning(UserWarning):
+    """Warning category for suspicious X4 expression source text.
+
+    Users who want their build to fail on these warnings can run Python
+    with ``-W error::x4md.expressions.X4ExpressionWarning`` (or call
+    :func:`warnings.simplefilter` from application code).
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,10 +76,13 @@ class Expr:
         """Render an expression-like value into X4 source text."""
 
         if isinstance(value, Expr):
-            return value.source
-        if isinstance(value, bool):
+            rendered = value.source
+        elif isinstance(value, bool):
             return "true" if value else "false"
-        return str(value)
+        else:
+            rendered = str(value)
+        _warn_suspicious_expression(rendered)
+        return rendered
 
     @classmethod
     def raw(cls, source: str) -> "Expr":

@@ -87,7 +87,15 @@ print(script.to_document())
 ### AI Order Example
 
 ```python
-from x4md import AIScript, Interrupts, Order, Resume, TextExpr, Wait
+from x4md import (
+    AIScript,
+    Interrupts,
+    Order,
+    Resume,
+    SetOrderSyncpointReached,
+    TextExpr,
+    Wait,
+)
 
 script = AIScript(
     "order.trade.demo",
@@ -95,9 +103,12 @@ script = AIScript(
         "DemoOrder",
         Interrupts(),
         Wait(max="5s"),
+        SetOrderSyncpointReached(),
         name=TextExpr.ref(20001, 1101),
         description=TextExpr.ref(20001, 1102),
         category="trade",
+        # X4 refuses infinite orders that do not mark a sync point, so
+        # the helper above is required here.
         infinite=True,
     ),
     version=1,
@@ -218,6 +229,33 @@ CreateOrder(
     immediate=True,
 )
 ```
+
+### Build-time Validation
+
+`x4md` performs a handful of targeted schema checks at construction time
+so that broken scripts fail in Python instead of surfacing as silent
+errors in X4's `debuglog.txt`:
+
+- `WriteToLogbook` rejects unknown `category` or `interaction` values.
+  The allow-lists mirror the `logcategorylookup` / `loginteractionlookup`
+  enums in `common.xsd` and are exposed as
+  `VALID_LOGBOOK_CATEGORIES` / `VALID_LOGBOOK_INTERACTIONS`.
+- `CancelOrder` requires the XSD-mandated `order=` keyword
+  (an order reference) and supports the optional `keepinloop=` flag.
+  Use `CancelAllOrders(object=...)` to cancel every order on a ship.
+- `Order(infinite=True)` requires a `SetOrderSyncpointReached` action
+  somewhere in its tree.
+- `Cue` / `Library` names must match X4's identifier rules
+  (no dots, no leading digits) and `Cue` children cannot be bare
+  `Return` actions.
+- `Expr.render` emits `X4ExpressionWarning` when it sees the
+  classic `not $x in $list` precedence trap; parenthesise as
+  `not ($x in $list)` to silence.
+- `Order(category=...)` emits `X4OrderCategoryWarning` when the value
+  is outside the XSD-declared `ordercategorylookup` enum; promote the
+  warning to an error with
+  `warnings.simplefilter("error", X4OrderCategoryWarning)` in strict
+  builds.
 
 ## Testing
 

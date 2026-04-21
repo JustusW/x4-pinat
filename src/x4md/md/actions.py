@@ -387,19 +387,38 @@ class CreateOrder(ActionNode):
 
 
 class CancelOrder(ActionNode):
-    """Cancel a ship's current order.
+    """Cancel a specific AI order and remove it from the owner's queue.
 
-    Maps to X4 MD <cancel_order> element.
+    Maps to X4 MD ``<cancel_order>`` element. The XSD requires the
+    ``order`` attribute (an expression that evaluates to an AI order,
+    e.g. ``$order`` or ``$ship.pilot.order``). Passing the ship/station
+    object instead is a common mistake that surfaces in ``debuglog.txt``
+    as ``Required attribute 'order' is missing in <cancel_order>``; to
+    cancel every order on an object use :class:`CancelAllOrders`
+    instead.
 
     Args:
-        object: Ship whose order to cancel
+        order: Order to cancel. Expression yielding an ``order`` value
+            (the XSD attribute is required).
+        keepinloop: For cancelled loop orders, keep the cancelled order
+            in the loop instead of removing it. Only meaningful for
+            non-temporary orders that are part of an order loop.
 
     Example:
-        CancelOrder(object="$ship")
+        CancelOrder(order="$order")
+        CancelOrder(order="$ship.pilot.order", keepinloop=True)
     """
 
-    def __init__(self, *, object: ExprLike) -> None:
-        super().__init__(tag="cancel_order", attrs=normalize_attrs({"object": object}))
+    def __init__(
+        self,
+        *,
+        order: ExprLike,
+        keepinloop: bool | None = None,
+    ) -> None:
+        super().__init__(
+            tag="cancel_order",
+            attrs=normalize_attrs({"order": order, "keepinloop": keepinloop}),
+        )
 
 
 class CancelAllOrders(ActionNode):
@@ -418,17 +437,56 @@ class CancelAllOrders(ActionNode):
         super().__init__(tag="cancel_all_orders", attrs=normalize_attrs({"object": object}))
 
 
+# X4 only accepts a fixed set of logbook categories. The most common
+# mistake is writing "alert" (singular) which the engine logs as
+# "Invalid or missing log category" and then drops the write without
+# surfacing a logbook entry. The values here mirror the
+# ``logcategorylookup`` enum in ``common.xsd`` (the shared schema
+# shipped with the game); keep this list in sync if Egosoft ever adds
+# new categories in a future patch.
+VALID_LOGBOOK_CATEGORIES: frozenset[str] = frozenset(
+    {"general", "missions", "news", "upkeep", "alerts", "tips"}
+)
+
+
+# Interaction types accepted by ``<write_to_logbook interaction="..."/>``.
+# Mirrors the ``loginteractionlookup`` enum in ``common.xsd``. Using an
+# unknown value causes X4 to reject the logbook entry at load time.
+VALID_LOGBOOK_INTERACTIONS: frozenset[str] = frozenset(
+    {"guidance", "showonmap", "showlocationonmap"}
+)
+
+
 class WriteToLogbook(ActionNode):
     """Write an entry to the player's logbook.
 
-    Maps to X4 MD <write_to_logbook> element.
+    Maps to X4 MD ``<write_to_logbook>`` element. The attribute list
+    mirrors the element definition in ``common.xsd``.
 
     Args:
-        category: Logbook category
-        title: Entry title
-        text: Entry text
-        interaction: Optional interaction object
-        money: Optional money amount
+        category: Logbook category. Must be one of
+            :data:`VALID_LOGBOOK_CATEGORIES`. ``category`` is a required
+            attribute in the XSD.
+        title: Entry title (required by XSD).
+        text: Entry text, either a single string or a notification-style
+            list of rows.
+        separator: Optional separator used between the left/right column
+            of a notification row (defaults to a single space in-game).
+        interaction: Optional logbook interaction type. When set, it
+            must be one of :data:`VALID_LOGBOOK_INTERACTIONS`.
+        object: Optional interaction object (meaning depends on
+            ``interaction``).
+        position: Optional interaction position (used with
+            ``interaction="showlocationonmap"``).
+        entity: Optional source entity (real entity or plain name).
+        faction: Optional source faction (real faction or plain name).
+        money: Optional money amount associated with the entry.
+        bonus: Optional bonus amount associated with the entry.
+        highlighted: Whether the logbook entry should be highlighted.
+
+    Raises:
+        ValueError: If ``category`` is not a known X4 logbook category,
+            or if ``interaction`` is set to an unknown value.
 
     Example:
         WriteToLogbook(
@@ -444,17 +502,44 @@ class WriteToLogbook(ActionNode):
         category: str,
         title: ExprLike,
         text: ExprLike | None = None,
-        interaction: ExprLike | None = None,
+        separator: ExprLike | None = None,
+        interaction: str | None = None,
+        object: ExprLike | None = None,
+        position: ExprLike | None = None,
+        entity: ExprLike | None = None,
+        faction: ExprLike | None = None,
         money: ExprLike | None = None,
+        bonus: ExprLike | None = None,
+        highlighted: bool | None = None,
     ) -> None:
+        if category not in VALID_LOGBOOK_CATEGORIES:
+            valid = ", ".join(sorted(VALID_LOGBOOK_CATEGORIES))
+            raise ValueError(
+                f"Invalid WriteToLogbook category {category!r}. X4 "
+                f"accepts only: {valid}. Note that 'alert' (singular) "
+                "is a common typo; the correct value is 'alerts'."
+            )
+        if interaction is not None and interaction not in VALID_LOGBOOK_INTERACTIONS:
+            valid_inter = ", ".join(sorted(VALID_LOGBOOK_INTERACTIONS))
+            raise ValueError(
+                f"Invalid WriteToLogbook interaction {interaction!r}. "
+                f"X4 accepts only: {valid_inter}."
+            )
         super().__init__(
             tag="write_to_logbook",
             attrs=normalize_attrs({
                 "category": category,
                 "title": title,
                 "text": text,
+                "separator": separator,
                 "interaction": interaction,
+                "object": object,
+                "position": position,
+                "entity": entity,
+                "faction": faction,
                 "money": money,
+                "bonus": bonus,
+                "highlighted": highlighted,
             }),
         )
 

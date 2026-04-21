@@ -15,6 +15,7 @@ from x4md import (
     Param,
     PathExpr,
     Resume,
+    SetOrderSyncpointReached,
     TextExpr,
     Wait,
 )
@@ -44,6 +45,7 @@ script = AIScript(
             )
         ),
         Wait(max="5s"),
+        SetOrderSyncpointReached(),
         name=TextExpr.ref(20001, 1101),
         description=TextExpr.ref(20001, 1102),
         category="trade",

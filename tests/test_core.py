@@ -10,7 +10,11 @@ from x4md import (
     Conditions,
     Cue,
     Cues,
+    DoIf,
+    Library,
     Params,
+    Return,
+    WriteToLogbook,
     BoolExpr,
     Dynamic,
     Expr,
@@ -150,6 +154,239 @@ class ExpressionTests(unittest.TestCase):
         self.assertEqual(rendered, "table[$Sector = arg1]")
         self.assertEqual(len(caught), 1)
         self.assertIn("should not be prefixed with '$'", str(caught[0].message))
+
+
+class IdentifierValidationTests(unittest.TestCase):
+    """Tests for MD cue and library name validation.
+
+    X4 rejects cue/library names containing ``.`` (or any character
+    outside ``[A-Za-z_][A-Za-z0-9_]*``) with a cryptic error message.
+    The constructors validate up-front so we fail fast in Python.
+    """
+
+    def test_cue_rejects_dotted_name(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            Cue("GalacticTradeProtector.Initialize")
+        self.assertIn("cue name", str(ctx.exception))
+
+    def test_cue_rejects_empty_name(self) -> None:
+        with self.assertRaises(ValueError):
+            Cue("")
+
+    def test_cue_rejects_leading_digit(self) -> None:
+        with self.assertRaises(ValueError):
+            Cue("1Bad")
+
+    def test_cue_rejects_non_string_name(self) -> None:
+        with self.assertRaises(ValueError):
+            Cue(None)  # type: ignore[arg-type]
+
+    def test_cue_accepts_valid_identifier(self) -> None:
+        Cue("GalacticTradeProtector_Initialize")
+        Cue("_underscore_ok")
+        Cue("Name123")
+
+    def test_library_rejects_dotted_name(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            Library("GalacticTradeProtector.Reactions")
+        self.assertIn("library name", str(ctx.exception))
+
+    def test_library_rejects_space_in_name(self) -> None:
+        with self.assertRaises(ValueError):
+            Library("Bad Name")
+
+    def test_library_accepts_valid_identifier(self) -> None:
+        Library("GalacticTradeProtector_Reactions")
+
+
+class ReturnInCueValidationTests(unittest.TestCase):
+    """Tests for the rule that ``<return>`` cannot appear in Cue actions.
+
+    X4 rejects ``<return>`` outside of ``<library>`` with the error
+    ``Script node 'return' is not allowed in this context.`` and then
+    silently refuses to execute the cue. ``Cue`` therefore raises at
+    construction time instead of emitting invalid XML.
+    """
+
+    def test_direct_return_in_cue_actions_raises(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            Cue("Capture", Actions(Return(False)))
+        self.assertIn("<return>", str(ctx.exception))
+
+    def test_nested_return_inside_do_if_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            Cue(
+                "Capture",
+                Actions(DoIf("not event.object?", Return(False))),
+            )
+
+    def test_library_may_contain_return(self) -> None:
+        # Sanity: libraries are still allowed to use <return>.
+        Library("Helper", Actions(Return(True)))
+
+    def test_cue_containing_library_ignores_library_returns(self) -> None:
+        # Although not semantically valid X4 nesting, the traversal
+        # must stop at <library> boundaries so that legitimate
+        # <return> usage inside a nested library does not trip the
+        # Cue-level check. This exercises the library-skip branch.
+        library = Library("Helper", Actions(Return(True)))
+        Cue("Capture", library)
+
+
+class LogbookCategoryValidationTests(unittest.TestCase):
+    """Tests for the :class:`WriteToLogbook` category enum.
+
+    Passing an invalid category causes X4 to log "Invalid or missing
+    log category" and drop the write, so the entry never reaches the
+    player's logbook. The constructor now rejects unknown categories
+    up-front.
+    """
+
+    def test_singular_alert_rejected(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            WriteToLogbook(category="alert", title="'Test'")
+        self.assertIn("alert", str(ctx.exception))
+        self.assertIn("alerts", str(ctx.exception))
+
+    def test_unknown_category_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            WriteToLogbook(category="dangerzone", title="'Test'")
+
+    def test_all_known_categories_accepted(self) -> None:
+        # ``missions`` was historically missing from x4md's allow list
+        # even though ``common.xsd`` has accepted it for years; make
+        # sure every XSD-sanctioned category round-trips.
+        for category in ("general", "missions", "news", "upkeep", "alerts", "tips"):
+            WriteToLogbook(category=category, title="'Test'")
+
+    def test_missions_category_accepted(self) -> None:
+        """The ``missions`` category used by vanilla missions must be
+        accepted; regression test for a past allow-list oversight."""
+        WriteToLogbook(category="missions", title="'Test'")
+
+
+class LogbookInteractionValidationTests(unittest.TestCase):
+    """Tests for the :class:`WriteToLogbook` ``interaction`` enum.
+
+    X4's ``<write_to_logbook>`` element accepts an optional
+    ``interaction`` attribute restricted to ``guidance``, ``showonmap``
+    and ``showlocationonmap`` (``loginteractionlookup`` in
+    ``common.xsd``). Unknown values cause X4 to reject the entire
+    logbook entry at load time, so we reject them in Python.
+    """
+
+    def test_unknown_interaction_rejected(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            WriteToLogbook(
+                category="alerts",
+                title="'Test'",
+                interaction="focus",
+            )
+        self.assertIn("interaction", str(ctx.exception))
+        self.assertIn("guidance", str(ctx.exception))
+
+    def test_all_known_interactions_accepted(self) -> None:
+        for interaction in ("guidance", "showonmap", "showlocationonmap"):
+            WriteToLogbook(
+                category="alerts",
+                title="'Test'",
+                interaction=interaction,
+            )
+
+    def test_no_interaction_is_allowed(self) -> None:
+        # ``interaction`` is optional; omitting it must not raise.
+        WriteToLogbook(category="alerts", title="'Test'")
+
+
+class CancelOrderSchemaTests(unittest.TestCase):
+    """Tests for the MD ``<cancel_order>`` attribute schema.
+
+    The element requires the ``order`` attribute (an order reference);
+    using ``object`` surfaces in ``debuglog.txt`` as
+    ``Required attribute 'order' is missing in <cancel_order>`` and
+    aborts the enclosing cue. The helper must therefore refuse the
+    legacy ``object=`` call pattern by virtue of Python's keyword-only
+    argument typing.
+    """
+
+    def test_renders_order_attribute(self) -> None:
+        from x4md import CancelOrder
+
+        node = CancelOrder(order="$order")
+        self.assertEqual(str(node), '<cancel_order order="$order"/>')
+
+    def test_rejects_legacy_object_keyword(self) -> None:
+        from x4md import CancelOrder
+
+        with self.assertRaises(TypeError):
+            CancelOrder(object="$ship")  # type: ignore[call-arg]
+
+    def test_keepinloop_round_trips(self) -> None:
+        from x4md import CancelOrder
+
+        self.assertEqual(
+            str(CancelOrder(order="$order", keepinloop=False)),
+            '<cancel_order order="$order" keepinloop="false"/>',
+        )
+
+
+class ExpressionHeuristicTests(unittest.TestCase):
+    """Tests for the ``not $x in $y`` precedence warning.
+
+    X4's grammar binds unary ``not`` tighter than binary ``in``, so
+    ``not $asset in $list`` fails at load time with
+    ``Error while parsing expression: Operator expected``. Every time
+    an expression is rendered we run a cheap regex check and warn so
+    the mistake is visible at build time instead of silently breaking
+    the script at runtime.
+    """
+
+    def test_warning_emitted_for_unparenthesised_not_in(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Expr.render("not $asset in $known")
+        messages = [str(w.message) for w in caught]
+        self.assertTrue(
+            any("not X in Y" in m for m in messages),
+            f"Expected precedence warning, got: {messages!r}",
+        )
+
+    def test_no_warning_when_parenthesised(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Expr.render("not ($asset in $known)")
+        messages = [str(w.message) for w in caught]
+        self.assertFalse(
+            any("not X in Y" in m for m in messages),
+            f"Did not expect precedence warning, got: {messages!r}",
+        )
+
+    def test_no_warning_for_unrelated_not_usage(self) -> None:
+        """``not`` used without a later ``in`` must not trigger."""
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Expr.render("not $ship.exists")
+        messages = [str(w.message) for w in caught]
+        self.assertFalse(
+            any("not X in Y" in m for m in messages),
+            f"Unexpected precedence warning: {messages!r}",
+        )
+
+    def test_no_warning_for_string_literal_containing_not(self) -> None:
+        """String literals such as ``'not in stock'`` must not trigger.
+
+        The heuristic requires the operand between ``not`` and ``in``
+        to look like a ``$``-prefixed variable, so plain English text
+        should never false-positive.
+        """
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Expr.render("'not in stock'")
+        messages = [str(w.message) for w in caught]
+        self.assertFalse(
+            any("not X in Y" in m for m in messages),
+            f"Unexpected precedence warning for literal: {messages!r}",
+        )
 
 
 class UtilityTests(unittest.TestCase):

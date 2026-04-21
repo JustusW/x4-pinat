@@ -1,6 +1,8 @@
 """Mission Director nodes and helpers."""
 
 from .actions import (
+    VALID_LOGBOOK_CATEGORIES,
+    VALID_LOGBOOK_INTERACTIONS,
     Actions,
     AppendListElements,
     AppendToList,
@@ -189,5 +191,7 @@ __all__ = [
     "SortList",
     "SortTrades",
     "SubstituteText",
+    "VALID_LOGBOOK_CATEGORIES",
+    "VALID_LOGBOOK_INTERACTIONS",
     "WriteToLogbook",
 ]
