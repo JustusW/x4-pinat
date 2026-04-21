@@ -106,7 +106,7 @@ class AIScriptTests(unittest.TestCase):
   </interrupts>
   <actions>
     <wait max="5s"/>
-    <set_order_syncpoint_reached order="this.order"/>
+    <set_order_syncpoint_reached order="this.ship.order"/>
   </actions>
 </aiscript>"""
 
@@ -262,24 +262,24 @@ class AINodeTests(unittest.TestCase):
         ``<set_order_failed>``, ``<set_order_state>``,
         ``<set_order_syncpoint_reached>``) requires an ``order``
         attribute per aiscripts.xsd; the Python wrappers default it to
-        ``this.order`` to match every vanilla X4 script.
+        ``this.ship.order`` like vanilla ship default-order scripts.
         """
 
         self.assertEqual(
             str(ClearOrderFailure()),
-            '<clear_order_failure order="this.order"/>',
+            '<clear_order_failure order="this.ship.order"/>',
         )
         self.assertEqual(
             str(SetOrderFailed(text=TextExpr.quote("No route"))),
-            '<set_order_failed order="this.order" text="\'No route\'"/>',
+            '<set_order_failed order="this.ship.order" text="\'No route\'"/>',
         )
         self.assertEqual(
             str(SetOrderState(state="orderstate.finish")),
-            '<set_order_state order="this.order" state="orderstate.finish"/>',
+            '<set_order_state order="this.ship.order" state="orderstate.finish"/>',
         )
         self.assertEqual(
             str(SetOrderSyncpointReached()),
-            '<set_order_syncpoint_reached order="this.order"/>',
+            '<set_order_syncpoint_reached order="this.ship.order"/>',
         )
         self.assertEqual(
             str(IncludeInterruptActions(ref="TradeAbort")),

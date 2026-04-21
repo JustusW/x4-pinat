@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 
-from x4md.expressions import ExprLike
+from x4md.expressions import Expr, ExprLike
 from x4md.md.common import normalize_attrs
 from x4md.md.types import ActionNode, ConditionNode, CueChildNode, ParamNode
 
@@ -458,22 +458,24 @@ VALID_ORDER_STATES: frozenset[str] = frozenset({"orderstate.critical", "ordersta
 
 # Default target for the ``order`` attribute on the order-state mutation
 # actions (``set_order_state``, ``set_order_syncpoint_reached``, etc.).
-# The XSD marks ``order`` as required, and every vanilla AI script
-# points it at ``this.order`` to mean "the order currently executing".
-_DEFAULT_ORDER_REF = "this.order"
+# The XSD marks ``order`` as required. In ship default-order scripts the
+# running context is the *order object*, not the ship: ``this.order`` is
+# null there. Vanilla order scripts therefore pass ``this.ship.order``
+# (or ``this.assignedcontrolled.order`` for assist orders).
+_DEFAULT_ORDER_REF = "this.ship.order"
 
 
 class SetOrderFailed(OrderChildNode):
     """Mark the current order as failed with a user-visible message.
 
     Maps to X4 AI ``<set_order_failed>``. The schema requires both
-    ``order`` (the order to mark, usually ``this.order``) and ``text``
+    ``order`` (the order to mark, usually ``this.ship.order``) and ``text``
     (the failure message shown to the player).
 
     Args:
         text: Failure message expression (usually a ``TextExpr.quote(...)``
               or a ``TextExpr.ref(...)`` entry).
-        order: Order reference; defaults to ``this.order``.
+        order: Order reference; defaults to ``this.ship.order``.
         recurring: Whether to repeat the failure message.
 
     Example:
@@ -502,7 +504,7 @@ class SetOrderState(OrderChildNode):
     and constrains ``state`` to :data:`VALID_ORDER_STATES`.
 
     Args:
-        order: Order reference; defaults to ``this.order``.
+        order: Order reference; defaults to ``this.ship.order``.
         state: Target state. Must be one of :data:`VALID_ORDER_STATES`
                (``"orderstate.critical"`` or ``"orderstate.finish"``).
                Passing anything else raises ``ValueError`` because X4
@@ -537,10 +539,10 @@ class SetOrderSyncpointReached(OrderChildNode):
 
     Maps to X4 AI ``<set_order_syncpoint_reached>``. The schema requires
     ``order`` (the order whose sync point to mark). Vanilla scripts
-    always point it at ``this.order``.
+    always point it at ``this.ship.order``.
 
     Args:
-        order: Order reference; defaults to ``this.order``.
+        order: Order reference; defaults to ``this.ship.order``.
 
     Example:
         SetOrderSyncpointReached()
@@ -557,10 +559,10 @@ class ClearOrderFailure(OrderChildNode):
     """Clear any previously-set failure state on an order.
 
     Maps to X4 AI ``<clear_order_failure>``. The schema requires
-    ``order``; vanilla scripts always point it at ``this.order``.
+    ``order``; vanilla scripts always point it at ``this.ship.order``.
 
     Args:
-        order: Order reference; defaults to ``this.order``.
+        order: Order reference; defaults to ``this.ship.order``.
 
     Example:
         ClearOrderFailure()
@@ -1011,13 +1013,18 @@ class SetCommand(OrderChildNode):
     Maps to X4 AI <set_command> element.
 
     Args:
-        command: Command to set
+        command: Command token such as ``command.trade``. Pass
+            ``Expr.raw("command.trade")`` or a plain string; bare strings
+            are auto-wrapped with :meth:`Expr.raw` so the engine does not
+            parse ``command.`` as a property chain.
 
     Example:
         SetCommand(command="command.trade")
     """
 
     def __init__(self, *, command: ExprLike) -> None:
+        if isinstance(command, str):
+            command = Expr.raw(command)
         super().__init__(
             tag="set_command",
             attrs=normalize_attrs({"command": command}),
@@ -1030,13 +1037,18 @@ class SetCommandAction(OrderChildNode):
     Maps to X4 AI <set_command_action> element.
 
     Args:
-        commandaction: Action to set
+        commandaction: Action token such as
+            ``commandaction.searchingtrades``. Bare strings are
+            auto-wrapped with :meth:`Expr.raw` for the same reason as
+            :class:`SetCommand`.
 
     Example:
         SetCommandAction(commandaction="commandaction.searchingtrades")
     """
 
     def __init__(self, *, commandaction: ExprLike) -> None:
+        if isinstance(commandaction, str):
+            commandaction = Expr.raw(commandaction)
         super().__init__(
             tag="set_command_action",
             attrs=normalize_attrs({"commandaction": commandaction}),
